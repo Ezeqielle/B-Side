@@ -1,0 +1,9 @@
+knpu_oauth2_client:
+    clients:
+        # https://developer.spotify.com/documentation/web-api/tutorials/code-flow
+        spotify:
+            type: spotify
+            client_id: '%env(SPOTIFY_CLIENT_ID)%'
+            client_secret: '%env(SPOTIFY_CLIENT_SECRET)%'
+            redirect_route: api_auth_callback
+            redirect_params: {}

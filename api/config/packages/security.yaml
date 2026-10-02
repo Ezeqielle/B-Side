@@ -1,0 +1,27 @@
+security:
+    # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
+    providers:
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: spotifyId
+
+    firewalls:
+        dev:
+            # Ensure dev tools and static assets are always allowed
+            pattern: ^/(_profiler|_wdt|assets|build)/
+            security: false
+        main:
+            lazy: true
+            provider: app_user_provider
+            custom_authenticators:
+                - App\Security\SpotifyAuthenticator
+            entry_point: App\Security\SpotifyAuthenticator
+            logout:
+                path: api_auth_logout
+                target: /
+
+    # Note: Only the *first* matching rule is applied
+    access_control:
+        - { path: ^/api/auth, roles: PUBLIC_ACCESS }
+        - { path: ^/api, roles: ROLE_USER }

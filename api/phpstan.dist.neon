@@ -1,0 +1,22 @@
+parameters:
+    level: 8
+    treatPhpDocTypesAsCertain: false
+    reportUnmatchedIgnoredErrors: false
+    paths:
+        - bin/
+        - config/
+        - public/
+        - src/
+        - tests/
+    excludePaths:
+        - tests/bootstrap.php
+    symfony:
+        containerXmlPath: var/cache/dev/App_KernelDevDebugContainer.xml
+    doctrine:
+        allowNullablePropertyForRequiredField: true
+    ignoreErrors:
+        - identifier: missingType.generics
+        -
+            message: '#Method App\\Kernel::getAllowedEnvs\(\) is unused\.#'
+            identifier: method.unused
+            path: src/Kernel.php

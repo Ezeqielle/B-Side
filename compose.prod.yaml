@@ -1,0 +1,27 @@
+---
+# Production environment override
+services:
+  php:
+    image: ${IMAGES_PREFIX:-}spotylist-php-prod
+    build:
+      context: ./api
+      target: frankenphp_prod
+      # Le Dockerfile compile le front Angular depuis ce contexte (stage front_builder)
+      additional_contexts:
+        front: ./front
+    environment:
+      APP_SECRET: ${APP_SECRET:?}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:?}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:?}
+
+  worker:
+    image: ${IMAGES_PREFIX:-}spotylist-php-prod
+    build:
+      context: ./api
+      target: frankenphp_prod
+      additional_contexts:
+        front: ./front
+    environment:
+      APP_SECRET: ${APP_SECRET:?}
+      SPOTIFY_CLIENT_ID: ${SPOTIFY_CLIENT_ID:?}
+      SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:?}

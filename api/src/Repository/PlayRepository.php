@@ -14,14 +14,15 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class PlayRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly TrackRepository $trackRepository,
+    ) {
         parent::__construct($registry, Play::class);
     }
 
     /**
-     * Ajoute en une requête les écoutes, en ignorant celles déjà enregistrées.
-     * Les titres doivent exister (TrackRepository::insertMissing()).
+     * Ajoute les écoutes en ignorant celles déjà enregistrées, avec leurs titres encore inconnus.
      *
      * @param list<StreamedPlay> $plays
      */
@@ -36,12 +37,16 @@ class PlayRepository extends ServiceEntityRepository
             'reason_end' => $play->reasonEnd,
         ], $plays);
 
-        $this->getEntityManager()->getConnection()->executeStatement(<<<'SQL'
-            INSERT INTO play (user_id, track_id, played_at, ms_played, skipped, reason_start, reason_end)
-            SELECT CAST(:user AS integer), p.*
-            FROM json_to_recordset(:plays) AS p(track_id varchar, played_at timestamptz, ms_played integer, skipped boolean, reason_start varchar, reason_end varchar)
-            ON CONFLICT DO NOTHING
-            SQL, ['user' => $userId, 'plays' => json_encode($rows, \JSON_THROW_ON_ERROR)]);
+        $connection = $this->getEntityManager()->getConnection();
+        $connection->transactional(function () use ($connection, $userId, $plays, $rows): void {
+            $this->trackRepository->insertMissing($plays);
+            $connection->executeStatement(<<<'SQL'
+                INSERT INTO play (user_id, track_id, played_at, ms_played, skipped, reason_start, reason_end)
+                SELECT CAST(:user AS integer), p.*
+                FROM json_to_recordset(:plays) AS p(track_id varchar, played_at timestamptz, ms_played integer, skipped boolean, reason_start varchar, reason_end varchar)
+                ON CONFLICT DO NOTHING
+                SQL, ['user' => $userId, 'plays' => json_encode($rows, \JSON_THROW_ON_ERROR)]);
+        });
     }
 
     public function summarize(User $user): HistorySummary

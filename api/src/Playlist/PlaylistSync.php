@@ -5,11 +5,11 @@ namespace App\Playlist;
 use App\Entity\Playlist;
 use App\Entity\User;
 use App\Repository\PlaylistRepository;
-use App\Repository\TrackRepository;
 use App\Spotify\Model\Playlist as SpotifyPlaylist;
 use App\Spotify\Model\PlaylistItem;
 use App\Spotify\Model\SavedTracksPage;
 use App\Spotify\SpotifyApi;
+use App\Stats\StatsCache;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Clock\ClockInterface;
 use Symfony\Component\HttpFoundation\Response;
@@ -27,13 +27,25 @@ class PlaylistSync
     public function __construct(
         private readonly SpotifyApi $spotify,
         private readonly PlaylistRepository $playlistRepository,
-        private readonly TrackRepository $trackRepository,
         private readonly EntityManagerInterface $entityManager,
         private readonly ClockInterface $clock,
+        private readonly StatsCache $statsCache,
     ) {
     }
 
+    /**
+     * Les stats de l'utilisateur sont recalculées ensuite, même après une synchro interrompue.
+     */
     public function sync(User $user): void
+    {
+        try {
+            $this->syncAll($user);
+        } finally {
+            $this->statsCache->clear($user->getId() ?? throw new \LogicException('User not persisted.'));
+        }
+    }
+
+    private function syncAll(User $user): void
     {
         $known = $this->playlistRepository->findByUserIndexed($user);
 
@@ -101,9 +113,6 @@ class PlaylistSync
      */
     private function saveTracks(Playlist $playlist, array $items, string $snapshotId): void
     {
-        if ([] !== $items) {
-            $this->trackRepository->saveFromSpotify(array_map(static fn (PlaylistItem $item) => $item->track, $items));
-        }
         $this->playlistRepository->replaceTracks($playlist, $items);
         $playlist->markSynced($snapshotId);
         $this->entityManager->flush();

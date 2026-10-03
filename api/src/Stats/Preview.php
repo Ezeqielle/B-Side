@@ -5,7 +5,7 @@ namespace App\Stats;
 use App\Deezer\DeezerApi;
 use App\Deezer\DeezerTrack;
 use App\Entity\User;
-use App\Spotify\SpotifyApi;
+use App\Spotify\SpotifyCatalog;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 
@@ -22,7 +22,7 @@ class Preview
     private const int URL_TTL = 600;
 
     public function __construct(
-        private readonly SpotifyApi $spotify,
+        private readonly SpotifyCatalog $catalog,
         private readonly DeezerApi $deezer,
         private readonly CacheInterface $cache,
     ) {
@@ -39,7 +39,7 @@ class Preview
         $deezerId = $this->cache->get('preview.match.' . $trackId, function (ItemInterface $item) use ($user, $trackId, &$found): ?int {
             $item->expiresAfter(self::MATCH_TTL);
 
-            $track = $this->spotify->getTrack($user, $trackId);
+            $track = $this->catalog->track($user, $trackId);
             $found = (null === $track->isrc ? null : $this->deezer->findTrackByIsrc($track->isrc))
                 ?? $this->deezer->searchTrack($track->name, $track->artists);
 

@@ -1,29 +1,20 @@
-import { httpResource } from '@angular/common/http';
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
-import {
-  ArtistStat,
-  HistorySummary,
-  HourStat,
-  MonthStat,
-  PlayFilter,
-  StatsOverview,
-  TrackStat,
-} from '../../core/models';
-import { ListeningClock } from './listening-clock';
+import { HistoryApi } from '../../core/history-api';
+import { StatsApi } from '../../core/stats-api';
 import { StatTiles } from './stat-tiles';
-import { statsResource } from './stats-resource';
+import { StatsClock } from './stats-clock';
+import { StatsFilter } from './stats-filter';
+import { StatsTops } from './stats-tops';
 import { TimelineChart } from './timeline-chart';
-import { TopArtists } from './top-artists';
-import { TopTracks } from './top-tracks';
 
 /**
- * Stats de l'historique importé. Le filtre (année, artiste) vit dans l'URL : partageable,
- * et chaque vue peut le modifier par un simple lien.
+ * Stats de l'historique importé, pour le filtre de l'URL (année, artiste). Le bas de la page,
+ * tops et heures d'écoute, n'est chargé qu'en arrivant à l'écran.
  */
 @Component({
   selector: 'app-stats-page',
@@ -33,11 +24,10 @@ import { TopTracks } from './top-tracks';
     HlmButtonImports,
     HlmCardImports,
     HlmSkeletonImports,
-    ListeningClock,
     StatTiles,
+    StatsClock,
+    StatsTops,
     TimelineChart,
-    TopArtists,
-    TopTracks,
   ],
   template: `
     <div class="mb-6">
@@ -52,31 +42,25 @@ import { TopTracks } from './top-tracks';
         hlmBtn
         size="xs"
         [variant]="year() ? 'ghost' : 'secondary'"
-        [routerLink]="[]"
-        [queryParams]="{ year: null }"
-        queryParamsHandling="merge"
+        [routerLink]="allYearsLink()"
         [attr.aria-current]="year() ? null : 'true'"
         >Tout</a
       >
-      @for (y of years(); track y) {
+      @for (y of years(); track y.year) {
         <a
           hlmBtn
           size="xs"
-          [variant]="year() === y ? 'secondary' : 'ghost'"
-          [routerLink]="[]"
-          [queryParams]="{ year: y }"
-          queryParamsHandling="merge"
-          [attr.aria-current]="year() === y ? 'true' : null"
-          >{{ y }}</a
+          [variant]="year() === y.year ? 'secondary' : 'ghost'"
+          [routerLink]="y.link"
+          [attr.aria-current]="year() === y.year ? 'true' : null"
+          >{{ y.year }}</a
         >
       }
       @if (artist(); as name) {
         <span hlmBadge variant="outline" class="ml-auto h-6 gap-1.5 pr-1">
           {{ name }}
           <a
-            [routerLink]="[]"
-            [queryParams]="{ artist: null }"
-            queryParamsHandling="merge"
+            [routerLink]="allArtistsLink()"
             class="hover:bg-muted rounded-full px-1"
             [attr.aria-label]="'Retirer le filtre ' + name"
             >✕</a
@@ -87,14 +71,14 @@ import { TopTracks } from './top-tracks';
 
     @if (overview.error()) {
       <p class="text-destructive" role="alert">Impossible de calculer tes stats pour le moment.</p>
+    } @else if (history.isEmpty()) {
+      <p class="text-muted-foreground">
+        Pas encore d'écoutes :
+        <a routerLink="/history" class="text-foreground underline">importe ton historique</a> pour
+        voir tes stats.
+      </p>
     } @else if (overview.value(); as o) {
-      @if (!o.plays && !year() && !artist()) {
-        <p class="text-muted-foreground">
-          Pas encore d'écoutes :
-          <a routerLink="/history" class="text-foreground underline">importe ton historique</a> pour
-          voir tes stats.
-        </p>
-      } @else {
+      <div class="grid gap-6">
         <div class="grid gap-6 transition-opacity" [class.opacity-60]="loading()">
           <app-stat-tiles [overview]="o" />
 
@@ -106,40 +90,20 @@ import { TopTracks } from './top-tracks';
               <app-timeline-chart [months]="timeline.value() ?? []" />
             </div>
           </section>
-
-          <div class="grid gap-6" [class]="artist() ? '' : 'lg:grid-cols-2'">
-            <section hlmCard>
-              <div hlmCardHeader>
-                <h2 hlmCardTitle>Titres les plus écoutés</h2>
-              </div>
-              <div hlmCardContent>
-                <app-top-tracks [tracks]="tracks.value() ?? []" />
-              </div>
-            </section>
-            @if (!artist()) {
-              <section hlmCard>
-                <div hlmCardHeader>
-                  <h2 hlmCardTitle>Artistes les plus écoutés</h2>
-                  <p hlmCardDescription>Clique sur un artiste pour ne voir que ses écoutes.</p>
-                </div>
-                <div hlmCardContent>
-                  <app-top-artists [artists]="artists.value() ?? []" />
-                </div>
-              </section>
-            }
-          </div>
-
-          <section hlmCard>
-            <div hlmCardHeader>
-              <h2 hlmCardTitle>Quand tu écoutes</h2>
-              <p hlmCardDescription>Par jour de la semaine et par heure.</p>
-            </div>
-            <div hlmCardContent>
-              <app-listening-clock [stats]="clock.value() ?? []" />
-            </div>
-          </section>
         </div>
-      }
+
+        @defer (on viewport) {
+          <app-stats-tops />
+        } @placeholder {
+          <div hlmSkeleton class="h-96 rounded-xl"></div>
+        }
+
+        @defer (on viewport) {
+          <app-stats-clock />
+        } @placeholder {
+          <div hlmSkeleton class="h-72 rounded-xl"></div>
+        }
+      </div>
     } @else {
       <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         @for (i of [1, 2, 3, 4, 5]; track i) {
@@ -151,42 +115,35 @@ import { TopTracks } from './top-tracks';
   `,
 })
 export class StatsPage {
-  /** Query params `?year=2021&artist=…`, liés par le routeur. */
-  readonly year = input<string>();
-  readonly artist = input<string>();
+  private readonly filter = inject(StatsFilter);
+  private readonly api = inject(StatsApi);
 
-  protected readonly filter = computed<PlayFilter>(() => {
-    const year = this.year();
-    return {
-      from: year && `${year}-01-01`,
-      to: year && `${year}-12-31`,
-      artist: this.artist(),
-    };
-  });
+  protected readonly year = this.filter.year;
+  protected readonly artist = this.filter.artist;
 
-  protected readonly overview = statsResource<StatsOverview>('overview', this.filter);
-  protected readonly timeline = statsResource<MonthStat[]>('timeline', this.filter);
-  protected readonly tracks = statsResource<TrackStat[]>('tracks', this.filter, { limit: 20 });
-  protected readonly artists = statsResource<ArtistStat[]>('artists', this.filter, { limit: 20 });
-  protected readonly clock = statsResource<HourStat[]>('clock', this.filter);
+  protected readonly overview = this.api.overview(this.filter.filter);
+  protected readonly timeline = this.api.timeline(this.filter.filter);
+  protected readonly history = inject(HistoryApi).summary();
 
-  protected readonly loading = computed(() =>
-    [this.overview, this.timeline, this.tracks, this.artists, this.clock].some((r) =>
-      r.isLoading(),
-    ),
+  protected readonly loading = computed(
+    () => this.overview.isLoading() || this.timeline.isLoading(),
   );
 
-  private readonly history = httpResource<HistorySummary>(() => '/api/history');
+  protected readonly allYearsLink = computed(() => this.filter.link({ year: null }));
+  protected readonly allArtistsLink = computed(() => this.filter.link({ artist: null }));
 
   /** Années couvertes par l'historique, de la plus récente à la plus ancienne. */
   protected readonly years = computed(() => {
-    const summary = this.history.hasValue() ? this.history.value() : undefined;
+    const summary = this.history.value();
     if (!summary?.firstPlayedAt || !summary.lastPlayedAt) {
       return [];
     }
     const [first, last] = [summary.firstPlayedAt, summary.lastPlayedAt].map((d) =>
       Number(d.slice(0, 4)),
     );
-    return Array.from({ length: last - first + 1 }, (_, i) => String(last - i));
+    return Array.from({ length: last - first + 1 }, (_, i) => {
+      const year = String(last - i);
+      return { year, link: this.filter.link({ year }) };
+    });
   });
 }

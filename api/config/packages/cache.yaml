@@ -15,10 +15,17 @@ framework:
         #app: cache.adapter.apcu
 
         # Namespaced pools use the above "app" backend by default
-        #pools:
-            #my.dedicated.cache: null
+        pools:
+            # En base : le worker le vide à la fin d'un import ou d'une synchro (App\Stats\StatsCache)
+            stats.cache:
+                adapter: cache.adapter.doctrine_dbal
+                tags: true
 
 when@test:
     framework:
         cache:
             app: cache.adapter.array
+            pools:
+                stats.cache:
+                    adapter: cache.adapter.array
+                    tags: true

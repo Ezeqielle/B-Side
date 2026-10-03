@@ -1,26 +1,16 @@
 import { DecimalPipe, PercentPipe } from '@angular/common';
-import { HttpClient, httpResource } from '@angular/common/http';
-import { Component, computed, effect, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, effect, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
-import { firstValueFrom } from 'rxjs';
-import {
-  DuplicateTrack,
-  HistorySummary,
-  PlaylistOverview,
-  PlaylistStat,
-  TrackStat,
-} from '../../core/models';
+import { HistoryApi } from '../../core/history-api';
+import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
 import { PlaylistTable } from './playlist-table';
 import { SincePipe } from './since';
-
-/** Attente entre deux vérifications de la fin d'une synchro, et nombre maximum de vérifications. */
-const POLL_MS = 2000;
-const POLL_MAX = 90;
 
 /**
  * Stats des playlists, croisées avec l'historique d'écoute. Les playlists sont recopiées
@@ -73,9 +63,10 @@ const POLL_MAX = 90;
 
     @if (overview.error() || playlists.error()) {
       <p class="text-destructive" role="alert">Impossible de récupérer tes playlists pour le moment.</p>
-    } @else if (overview.hasValue() && playlists.hasValue()) {
-      @let o = overview.value();
-      @if (!playlists.value().length && !syncing()) {
+    } @else if (overview.value() && playlists.value()) {
+      @let o = overview.value()!;
+      @let all = playlists.value()!;
+      @if (!all.length && !syncing()) {
         <p class="text-muted-foreground">
           @if (o.syncedAt) {
             Aucune playlist dont Spotify donne le contenu : seules celles que tu as créées ou dont tu es
@@ -125,7 +116,7 @@ const POLL_MAX = 90;
               </p>
             </div>
             <div hlmCardContent>
-              <app-playlist-table [playlists]="playlists.value()" />
+              <app-playlist-table [playlists]="all" />
             </div>
           </section>
 
@@ -137,9 +128,9 @@ const POLL_MAX = 90;
               </div>
               <div hlmCardContent>
                 <ul class="space-y-3">
-                  @for (track of duplicates.value(); track track.id) {
+                  @for (track of duplicates.value() ?? []; track track.id) {
                     <li class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
-                      <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
+                      <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
                       <div class="min-w-0">
                         <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                         <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
@@ -164,10 +155,10 @@ const POLL_MAX = 90;
               </div>
               <div hlmCardContent>
                 <ol class="space-y-3">
-                  @for (track of missing.value(); track track.id; let i = $index) {
+                  @for (track of missing.value() ?? []; track track.id; let i = $index) {
                     <li class="grid grid-cols-[1.5rem_auto_minmax(0,1fr)_auto] items-center gap-x-3">
                       <span class="text-muted-foreground text-right text-sm tabular-nums">{{ i + 1 }}</span>
-                      <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
+                      <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
                       <div class="min-w-0">
                         <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                         <p class="text-muted-foreground truncate text-xs">
@@ -196,67 +187,53 @@ const POLL_MAX = 90;
   `,
 })
 export class PlaylistsPage {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(PlaylistsApi);
 
-  protected readonly overview = httpResource<PlaylistOverview>(() => '/api/playlists/overview');
-  protected readonly playlists = httpResource<PlaylistStat[]>(() => '/api/playlists');
-  protected readonly duplicates = httpResource<DuplicateTrack[]>(() => '/api/playlists/duplicates', {
-    defaultValue: [],
-  });
-  protected readonly missing = httpResource<TrackStat[]>(
-    () => ({ url: '/api/playlists/missing', params: { limit: 20 } }),
-    { defaultValue: [] },
-  );
-  private readonly history = httpResource<HistorySummary>(() => '/api/history');
+  protected readonly overview = this.api.overview();
+  protected readonly playlists = this.api.list();
+  protected readonly duplicates = this.api.duplicates();
+  protected readonly missing = this.api.missing(20);
+  private readonly history = inject(HistoryApi).summary();
 
   protected readonly syncing = signal(false);
   protected readonly syncFailed = signal(false);
+  private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly syncedAt = computed(() =>
-    this.overview.hasValue() ? this.overview.value().syncedAt : null,
-  );
-  protected readonly noHistory = computed(
-    () => this.history.hasValue() && this.history.value().plays === 0,
-  );
+  protected readonly syncedAt = computed(() => this.overview.value()?.syncedAt ?? null);
+  protected readonly noHistory = this.history.isEmpty;
 
   constructor() {
     // Première visite : les playlists n'ont jamais été récupérées. Une seule tentative automatique.
     let autoSynced = false;
     effect(() => {
-      if (!autoSynced && this.overview.hasValue() && this.overview.value().syncedAt === null) {
+      if (!autoSynced && this.overview.value()?.syncedAt === null) {
         autoSynced = true;
-        void this.sync();
+        this.sync();
       }
     });
   }
 
   /** Lance la synchro, puis attend que `syncedAt` change pour tout recharger. */
-  protected async sync(): Promise<void> {
+  protected sync(): void {
     if (this.syncing()) {
       return;
     }
     this.syncing.set(true);
     this.syncFailed.set(false);
-    const before = this.syncedAt();
 
-    try {
-      await firstValueFrom(this.http.post('/api/playlists/sync', null));
-      for (let i = 0; i < POLL_MAX; i++) {
-        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
-        const overview = await firstValueFrom(
-          this.http.get<PlaylistOverview>('/api/playlists/overview'),
-        );
-        if (overview.syncedAt !== before) {
-          break;
-        }
+    const done = () => {
+      for (const resource of [this.overview, this.playlists, this.duplicates, this.missing]) {
+        resource.reload();
       }
-    } catch {
-      this.syncFailed.set(true);
-    }
-
-    for (const resource of [this.overview, this.playlists, this.duplicates, this.missing]) {
-      resource.reload();
-    }
-    this.syncing.set(false);
+      this.syncing.set(false);
+    };
+    // En quittant la page, on cesse d'attendre la fin de la synchro
+    this.api.sync(this.syncedAt()).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      complete: done,
+      error: () => {
+        this.syncFailed.set(true);
+        done();
+      },
+    });
   }
 }

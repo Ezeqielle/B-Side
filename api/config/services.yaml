@@ -19,5 +19,13 @@ services:
     App\:
         resource: '../src/'
 
+    # Sessions en base, sans verrou : avec un verrou (fichiers compris), les appels simultanés d'une page
+    # attendent chacun leur tour. Les appels en lecture n'écrivent rien en session, deux écritures concurrentes
+    # restent donc rares. La table est créée par une migration.
+    Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler:
+        arguments:
+            - '%env(DATABASE_URL)%'
+            - { lock_mode: !php/const Symfony\Component\HttpFoundation\Session\Storage\Handler\PdoSessionHandler::LOCK_NONE }
+
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones

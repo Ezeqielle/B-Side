@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Entity\Track;
 use App\Entity\User;
+use App\History\StreamedPlay;
 use App\History\StreamingHistoryParser;
 use App\Message\ImportPlays;
 use App\Message\SyncPlaylists;
@@ -137,6 +138,49 @@ class PlaylistControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testPlaylist(): void
+    {
+        $this->sync();
+
+        $mix = $this->get('/api/playlists/mix');
+        self::assertSame('Mix', $mix['name']);
+        self::assertSame(2, $mix['tracks']);
+        self::assertSame('Titres likés', $this->get('/api/playlists/liked')['name']);
+
+        $this->client->request('GET', '/api/playlists/discover');
+        self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
+
+        $this->client->request('GET', '/api/playlists/nope');
+        self::assertResponseStatusCodeSame(404);
+    }
+
+    public function testTracksToCleanUp(): void
+    {
+        // Song A passé deux fois en plus de ses deux écoutes : passé une fois sur deux
+        $this->import([
+            $this->play(self::SONG_A, 'Song A', 'Artist A', '2022-06-01T10:00:00Z', 5000, true),
+            $this->play(self::SONG_A, 'Song A', 'Artist A', '2022-06-02T10:00:00Z', 5000, true),
+        ]);
+        $this->sync();
+
+        self::assertSame(['often_skipped', 'never_played'], array_column($this->get('/api/playlists/mix/tracks'), 'cleanup'));
+
+        // Song A n'est pas encore passé à la mi-2022
+        self::assertSame([null, 'never_played'], array_column($this->get('/api/playlists/mix/tracks?to=2022-05-31'), 'cleanup'));
+    }
+
+    public function testStatsFollowThePeriod(): void
+    {
+        $this->sync();
+
+        $tracks = $this->get('/api/playlists/mix/tracks?from=2021-01-01&to=2021-12-31');
+        self::assertSame([1, 0], array_column($tracks, 'plays'), 'Seule l\'écoute de 2021');
+
+        self::assertSame(3, $this->get('/api/playlists/overview?from=2022-01-01')['neverPlayed']);
+        self::assertSame(2, $this->get('/api/playlists/mix?from=2022-01-01')['neverPlayed']);
+        self::assertSame(2, $this->get('/api/playlists?artist=Artist%20B')[0]['neverPlayed'], 'Song A ne compte pas pour Artist B');
+    }
+
     public function testLikedTracksAreAPlaylist(): void
     {
         $this->sync();
@@ -203,6 +247,19 @@ class PlaylistControllerTest extends WebTestCase
         array_unshift($this->likes, $this->like(61));
         self::assertSame(3, $this->sync(), 'Like ajouté');
         self::assertSame($this->like(61)['track']['id'], $this->get('/api/playlists/liked/tracks')[0]['id']);
+    }
+
+    /**
+     * @param list<StreamedPlay> $plays
+     */
+    private function import(array $plays): void
+    {
+        static::getContainer()->get(ImportPlaysHandler::class)(new ImportPlays($this->userId(), $plays));
+    }
+
+    private function play(string $id, string $name, string $artist, string $playedAt, int $msPlayed, bool $skipped): StreamedPlay
+    {
+        return new StreamedPlay($id, $name, $artist, 'Album', new \DateTimeImmutable($playedAt), $msPlayed, $skipped, 'clickrow', $skipped ? 'fwdbtn' : 'trackdone');
     }
 
     /**

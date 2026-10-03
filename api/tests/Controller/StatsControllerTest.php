@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Entity\Track;
 use App\Entity\User;
+use App\History\StreamedPlay;
 use App\History\StreamingHistoryParser;
 use App\Message\ImportPlays;
 use App\MessageHandler\ImportPlaysHandler;
@@ -95,6 +96,20 @@ class StatsControllerTest extends WebTestCase
             ['weekday' => 6, 'hour' => 0, 'plays' => 1],
             ['weekday' => 7, 'hour' => 11, 'plays' => 1],
         ], $clock);
+    }
+
+    public function testStatsAreKeptUntilTheNextImport(): void
+    {
+        // Le même conteneur pour les requêtes et l'import, et donc le même cache
+        $this->client->disableReboot();
+        self::assertSame(2, $this->get('/api/stats/overview')['plays']);
+
+        $user = static::getContainer()->get(EntityManagerInterface::class)->getRepository(User::class)->findOneBy([]);
+        static::getContainer()->get(ImportPlaysHandler::class)(new ImportPlays((int) $user?->getId(), [
+            new StreamedPlay('4uLU6hMCjMI75M1A2tKUQC', 'Song A', 'Artist A', 'Album A', new \DateTimeImmutable('2023-05-01T10:00:00Z'), 200000, false, 'clickrow', 'trackdone'),
+        ]));
+
+        self::assertSame(3, $this->get('/api/stats/overview')['plays']);
     }
 
     public function testInvalidFilterIsRejected(): void

@@ -13,8 +13,10 @@ use Doctrine\Persistence\ManagerRegistry;
  */
 class PlaylistRepository extends ServiceEntityRepository
 {
-    public function __construct(ManagerRegistry $registry)
-    {
+    public function __construct(
+        ManagerRegistry $registry,
+        private readonly TrackRepository $trackRepository,
+    ) {
         parent::__construct($registry, Playlist::class);
     }
 
@@ -36,7 +38,7 @@ class PlaylistRepository extends ServiceEntityRepository
     }
 
     /**
-     * Remplace le contenu de la playlist. Les titres doivent exister (TrackRepository::saveFromSpotify()).
+     * Remplace le contenu de la playlist, en enregistrant ses titres.
      *
      * @param list<PlaylistItem> $items
      */
@@ -49,11 +51,12 @@ class PlaylistRepository extends ServiceEntityRepository
         ], $items, array_keys($items));
 
         $connection = $this->getEntityManager()->getConnection();
-        $connection->transactional(static function () use ($connection, $playlist, $rows): void {
+        $connection->transactional(function () use ($connection, $playlist, $items, $rows): void {
             $connection->executeStatement('DELETE FROM playlist_track WHERE playlist_id = ?', [$playlist->getId()]);
             if ([] === $rows) {
                 return;
             }
+            $this->trackRepository->saveFromSpotify(array_map(static fn (PlaylistItem $item) => $item->track, $items));
             $connection->executeStatement(<<<'SQL'
                 INSERT INTO playlist_track (playlist_id, position, track_id, added_at)
                 SELECT CAST(:playlist AS integer), t.*

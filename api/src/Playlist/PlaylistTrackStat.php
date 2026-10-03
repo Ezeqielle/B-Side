@@ -15,6 +15,7 @@ final readonly class PlaylistTrackStat
         public int $plays,
         public float $skipRate,
         public ?\DateTimeImmutable $lastPlayedAt,
+        public ?Cleanup $cleanup,
     ) {
     }
 }

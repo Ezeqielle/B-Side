@@ -4,7 +4,7 @@ namespace App\MessageHandler;
 
 use App\Message\ImportPlays;
 use App\Repository\PlayRepository;
-use App\Repository\TrackRepository;
+use App\Stats\StatsCache;
 use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 
 /**
@@ -14,14 +14,14 @@ use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 class ImportPlaysHandler
 {
     public function __construct(
-        private readonly TrackRepository $trackRepository,
         private readonly PlayRepository $playRepository,
+        private readonly StatsCache $statsCache,
     ) {
     }
 
     public function __invoke(ImportPlays $message): void
     {
-        $this->trackRepository->insertMissing($message->plays);
         $this->playRepository->insertMissing($message->userId, $message->plays);
+        $this->statsCache->clear($message->userId);
     }
 }

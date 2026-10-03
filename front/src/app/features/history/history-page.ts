@@ -1,11 +1,10 @@
 import { DatePipe, DecimalPipe } from '@angular/common';
-import { HttpClient, httpResource } from '@angular/common/http';
 import { Component, inject, signal } from '@angular/core';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { firstValueFrom } from 'rxjs';
-import { HistorySummary } from '../../core/models';
+import { HistoryApi } from '../../core/history-api';
 
 @Component({
   selector: 'app-history-page',
@@ -53,7 +52,7 @@ import { HistorySummary } from '../../core/models';
           @if (summary.error()) {
             <p class="text-destructive text-sm" role="alert">Impossible de récupérer ton historique pour le moment.</p>
           } @else if (summary.value(); as s) {
-            @if (s.plays) {
+            @if (!summary.isEmpty()) {
               <p class="text-3xl font-bold tabular-nums">{{ s.plays | number }} <span class="text-base font-normal">écoutes</span></p>
               <p class="text-muted-foreground text-sm">
                 {{ s.tracks | number }} titres, de {{ s.firstPlayedAt | date: 'yyyy' }} à {{ s.lastPlayedAt | date: 'yyyy' }}
@@ -74,9 +73,9 @@ import { HistorySummary } from '../../core/models';
   `,
 })
 export class HistoryPage {
-  private readonly http = inject(HttpClient);
+  private readonly api = inject(HistoryApi);
 
-  protected readonly summary = httpResource<HistorySummary>(() => '/api/history');
+  protected readonly summary = this.api.summary();
   protected readonly progress = signal<{ done: number; total: number } | null>(null);
   protected readonly rejected = signal<string[]>([]);
 
@@ -88,10 +87,8 @@ export class HistoryPage {
 
     for (const [done, file] of files.entries()) {
       this.progress.set({ done, total: files.length });
-      const body = new FormData();
-      body.append('file', file);
       try {
-        await firstValueFrom(this.http.post('/api/history', body));
+        await firstValueFrom(this.api.upload(file));
       } catch {
         this.rejected.update((names) => [...names, file.name]);
       }

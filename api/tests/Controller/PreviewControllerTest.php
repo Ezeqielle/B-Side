@@ -110,7 +110,21 @@ class PreviewControllerTest extends WebTestCase
 
         self::assertResponseStatusCodeSame(404);
         self::assertSame(self::PREVIEW_URL, $this->preview());
-        self::assertSame(2, $spotify->getRequestsCount());
+        self::assertSame(1, $spotify->getRequestsCount(), 'Le titre Spotify, lui, reste en cache');
+    }
+
+    public function testPreviewAndArtworkAskSpotifyOnlyOnceForTheSameTrack(): void
+    {
+        $spotify = $this->mockSpotify(self::ISRC);
+        $this->mockDeezer(['track/isrc:' . self::ISRC => ['id' => 363747251, 'preview' => self::PREVIEW_URL]]);
+        $this->client->disableReboot();
+
+        $this->client->request('GET', '/api/preview/track/' . self::TRACK_ID);
+        self::assertResponseRedirects(self::PREVIEW_URL);
+        $this->client->request('GET', '/api/artwork/track/' . self::TRACK_ID);
+        self::assertResponseRedirects('https://i.scdn.co/image/cover');
+
+        self::assertSame(1, $spotify->getRequestsCount());
     }
 
     private function preview(): ?string
@@ -125,7 +139,7 @@ class PreviewControllerTest extends WebTestCase
             'uri' => 'spotify:track:' . self::TRACK_ID,
             'name' => 'Song A',
             'artists' => [['id' => 'artist-a', 'name' => 'Artist A']],
-            'album' => ['name' => 'Album A', 'images' => []],
+            'album' => ['name' => 'Album A', 'images' => [['url' => 'https://i.scdn.co/image/cover']]],
             'duration_ms' => 200000,
             'external_ids' => null === $isrc ? [] : ['isrc' => $isrc],
         ]), 'https://api.spotify.com/v1/');

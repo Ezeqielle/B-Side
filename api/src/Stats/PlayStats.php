@@ -3,7 +3,6 @@
 namespace App\Stats;
 
 use App\Entity\User;
-use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
 
 /**
@@ -11,20 +10,19 @@ use Doctrine\DBAL\Query\QueryBuilder;
  */
 final readonly class PlayStats
 {
-    /** Comme Spotify, on ne compte une écoute qu'au-delà de 30 secondes. */
-    private const string PLAYS = 'COUNT(*) FILTER (WHERE p.ms_played >= 30000)';
+    private const string PLAYS = 'COUNT(*) FILTER (WHERE ' . Listening::COUNTS . ')';
     private const string MS_PLAYED = 'COALESCE(SUM(p.ms_played), 0)';
     private const string SKIP_RATE = 'COALESCE(AVG(p.skipped::int), 0)';
     private const string LOCAL_TIME = 'p.played_at AT TIME ZONE :tz';
 
-    public function __construct(private Connection $connection)
+    public function __construct(private Listening $listening)
     {
     }
 
     public function overview(User $user, PlayFilter $filter): Overview
     {
         /** @var array{plays: int, ms_played: int, tracks: int, artists: int, skip_rate: string} $row */
-        $row = $this->plays($user, $filter)
+        $row = $this->listening->plays($user, $filter)
             ->select(
                 self::PLAYS . ' AS plays',
                 self::MS_PLAYED . ' AS ms_played',
@@ -48,27 +46,25 @@ final readonly class PlayStats
      */
     public function topTracks(User $user, PlayFilter $filter, int $limit): array
     {
-        return $this->rankTracks($this->plays($user, $filter), $limit);
+        return $this->rankTracks($this->listening->plays($user, $filter), $limit);
     }
 
     /**
-     * Titres les plus écoutés qui ne sont dans aucune playlist lisible de l'utilisateur,
-     * rapprochés par nom et artiste comme dans PlaylistStats.
+     * Titres les plus écoutés qui ne sont dans aucune playlist lisible de l'utilisateur (titres likés compris).
      *
      * @return list<TrackStat>
      */
     public function topTracksOutsidePlaylists(User $user, PlayFilter $filter, int $limit): array
     {
-        $query = $this->plays($user, $filter)->andWhere(<<<'SQL'
+        $query = $this->listening->plays($user, $filter)->andWhere('
             NOT EXISTS (
                 SELECT 1
                 FROM playlist pl
                 INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
                 INNER JOIN track pt_t ON pt_t.id = pt.track_id
-                WHERE pl.user_id = p.user_id AND pl.readable
-                    AND lower(pt_t.name) = lower(t.name) AND lower(pt_t.artist_name) = lower(t.artist_name)
+                WHERE pl.user_id = p.user_id AND pl.readable AND ' . Listening::sameSong('pt_t', 't') . '
             )
-            SQL);
+            ');
 
         return $this->rankTracks($query, $limit);
     }
@@ -79,7 +75,7 @@ final readonly class PlayStats
     public function topArtists(User $user, PlayFilter $filter, int $limit): array
     {
         /** @var list<array{artist_name: string, plays: int, ms_played: int, tracks: int}> $rows */
-        $rows = $this->plays($user, $filter)
+        $rows = $this->listening->plays($user, $filter)
             ->select(
                 't.artist_name',
                 self::PLAYS . ' AS plays',
@@ -109,7 +105,7 @@ final readonly class PlayStats
     public function timeline(User $user, PlayFilter $filter): array
     {
         /** @var list<array{month: string, plays: int, ms_played: int}> $rows */
-        $rows = $this->plays($user, $filter)
+        $rows = $this->listening->plays($user, $filter)
             ->select(
                 'to_char(' . self::LOCAL_TIME . ", 'YYYY-MM') AS month",
                 self::PLAYS . ' AS plays',
@@ -134,7 +130,7 @@ final readonly class PlayStats
     public function clock(User $user, PlayFilter $filter): array
     {
         /** @var list<array{weekday: string, hour: string, plays: int}> $rows */
-        $rows = $this->plays($user, $filter)
+        $rows = $this->listening->plays($user, $filter)
             ->select(
                 'EXTRACT(ISODOW FROM ' . self::LOCAL_TIME . ') AS weekday',
                 'EXTRACT(HOUR FROM ' . self::LOCAL_TIME . ') AS hour',
@@ -186,35 +182,5 @@ final readonly class PlayStats
             skipRate: (float) $row['skip_rate'],
             lastPlayedAt: new \DateTimeImmutable($row['last_played_at']),
         ), $rows);
-    }
-
-    /**
-     * Écoutes de l'utilisateur (alias p) avec leur titre (alias t), restreintes par le filtre.
-     */
-    private function plays(User $user, PlayFilter $filter): QueryBuilder
-    {
-        $query = $this->connection->createQueryBuilder()
-            ->from('play', 'p')
-            ->innerJoin('p', 'track', 't', 't.id = p.track_id')
-            ->where('p.user_id = :user')
-            ->setParameter('user', $user->getId())
-            ->setParameter('tz', $filter->tz);
-
-        if (null !== $filter->from) {
-            $query->andWhere('p.played_at >= CAST(:from AS timestamp) AT TIME ZONE :tz')
-                ->setParameter('from', $filter->from->format('Y-m-d'));
-        }
-
-        if (null !== $filter->to) {
-            $query->andWhere("p.played_at < (CAST(:to AS timestamp) + INTERVAL '1 day') AT TIME ZONE :tz")
-                ->setParameter('to', $filter->to->format('Y-m-d'));
-        }
-
-        if (null !== $filter->artist) {
-            $query->andWhere('t.artist_name = :artist')
-                ->setParameter('artist', $filter->artist);
-        }
-
-        return $query;
     }
 }

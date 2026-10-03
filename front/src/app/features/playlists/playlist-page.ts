@@ -1,18 +1,18 @@
 import { DatePipe, DecimalPipe, PercentPipe } from '@angular/common';
-import { httpResource } from '@angular/common/http';
-import { Component, computed, input, signal } from '@angular/core';
+import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
-import { PlaylistStat, PlaylistTrackStat } from '../../core/models';
+import { PlaylistTrackStat } from '../../core/models';
+import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
 import { PlaylistCover } from './playlist-cover';
 import { SincePipe } from './since';
 import { Sort, SortHeader, sortRows } from './sort-header';
 
-/** Au-delà, un titre est « souvent passé ». */
-const OFTEN_SKIPPED = 0.5;
+/** Lignes affichées d'un coup : les titres likés se comptent par milliers. */
+const PAGE_SIZE = 100;
 
 const FILTERS = [
   { value: 'all', label: 'Tous' },
@@ -71,7 +71,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 
     @if (tracks.error()) {
       <p class="text-destructive" role="alert">Impossible de récupérer cette playlist.</p>
-    } @else if (tracks.hasValue()) {
+    } @else if (tracks.value()) {
       <section hlmCard>
         <div hlmCardHeader class="flex flex-wrap items-center justify-between gap-2">
           <h2 hlmCardTitle>Titres</h2>
@@ -107,12 +107,12 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                 </tr>
               </thead>
               <tbody>
-                @for (track of rows(); track track.position) {
+                @for (track of shownRows(); track track.position) {
                   <tr class="border-b last:border-0">
                     <td class="text-muted-foreground py-2 text-right tabular-nums">{{ track.position + 1 }}</td>
                     <td class="max-w-0 py-2 pr-4 pl-3">
                       <div class="flex items-center gap-3">
-                        <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
+                        <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
                         <div class="min-w-0">
                           <p class="truncate font-medium" [title]="track.name">{{ track.name }}</p>
                           <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
@@ -138,6 +138,13 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
               </tbody>
             </table>
           </div>
+          @if (rows().length > shown()) {
+            <div class="mt-4 flex justify-center">
+              <button hlmBtn variant="outline" size="sm" (click)="shown.set(shown() + pageSize)">
+                Afficher plus ({{ rows().length - shown() | number }} restants)
+              </button>
+            </div>
+          }
         </div>
       </section>
     } @else {
@@ -153,28 +160,24 @@ export class PlaylistPage {
   protected readonly filter = signal<Filter>('all');
   protected readonly sort = signal<Sort>({ key: 'position', desc: false });
 
-  private readonly playlists = httpResource<PlaylistStat[]>(() => '/api/playlists');
-  protected readonly tracks = httpResource<PlaylistTrackStat[]>(
-    () => `/api/playlists/${encodeURIComponent(this.id())}/tracks`,
-  );
-
-  protected readonly playlist = computed(() =>
-    this.playlists.hasValue() ? this.playlists.value().find((p) => p.id === this.id()) : undefined,
-  );
+  private readonly api = inject(PlaylistsApi);
+  protected readonly playlist = this.api.playlist(this.id).value;
+  protected readonly tracks = this.api.tracks(this.id);
 
   protected readonly duration = computed(() => {
     const minutes = Math.round((this.playlist()?.durationMs ?? 0) / 60_000);
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
   });
 
+  /** Les titres à nettoyer sont désignés par le serveur. */
   private readonly matching: Record<Filter, (track: PlaylistTrackStat) => boolean> = {
     all: () => true,
-    never: (t) => !t.plays,
-    skipped: (t) => t.plays > 0 && t.skipRate >= OFTEN_SKIPPED,
+    never: (t) => t.cleanup === 'never_played',
+    skipped: (t) => t.cleanup === 'often_skipped',
   };
 
   protected readonly counts = computed(() => {
-    const tracks = this.tracks.hasValue() ? this.tracks.value() : [];
+    const tracks = this.tracks.value() ?? [];
     return Object.fromEntries(
       FILTERS.map(({ value }) => [value, tracks.filter(this.matching[value]).length]),
     ) as Record<Filter, number>;
@@ -182,7 +185,15 @@ export class PlaylistPage {
 
   protected readonly rows = computed(() => {
     const { key, desc } = this.sort();
-    const tracks = this.tracks.hasValue() ? this.tracks.value() : [];
+    const tracks = this.tracks.value() ?? [];
     return sortRows(tracks.filter(this.matching[this.filter()]), COLUMNS[key], desc);
   });
+
+  protected readonly pageSize = PAGE_SIZE;
+  /** Nombre de lignes affichées, remis à une page à chaque changement de playlist, de filtre ou de tri. */
+  protected readonly shown = linkedSignal({
+    source: () => [this.id(), this.filter(), this.sort()],
+    computation: () => PAGE_SIZE,
+  });
+  protected readonly shownRows = computed(() => this.rows().slice(0, this.shown()));
 }

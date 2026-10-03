@@ -107,6 +107,9 @@ export interface PlaylistStat {
   lastAddedAt: string | null;
 }
 
+/** Raison de retirer un titre, décidée par le serveur : jamais écouté, ou passé au moins une fois sur deux. */
+export type TrackCleanup = 'never_played' | 'often_skipped';
+
 export interface PlaylistTrackStat {
   position: number;
   id: string;
@@ -118,6 +121,7 @@ export interface PlaylistTrackStat {
   plays: number;
   skipRate: number;
   lastPlayedAt: string | null;
+  cleanup: TrackCleanup | null;
 }
 
 /** `playlists` : noms des playlists, répétés si le titre y est en double. */

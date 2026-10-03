@@ -1,18 +1,18 @@
 import { DatePipe, DecimalPipe, Location, PercentPipe } from '@angular/common';
 import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { HlmAlertDialogImports } from '@spartan-ng/helm/alert-dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HistoryApi } from '../../core/history-api';
-import { LIKED_PLAYLIST_ID, PlaylistTrackStat } from '../../core/models';
+import { PlaylistTrackStat } from '../../core/models';
 import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
 import { CleanupPanel } from './cleanup-panel';
 import { PRESETS, matchesRules, paramsOf, rulesOf } from './cleanup-rules';
 import { PlaylistCover } from './playlist-cover';
+import { RemoveTracks } from './remove-tracks';
 import { SincePipe } from './since';
 import { Sort, SortHeader, sortRows } from './sort-header';
 
@@ -39,13 +39,13 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
     DecimalPipe,
     PercentPipe,
     RouterLink,
-    HlmAlertDialogImports,
     HlmButtonImports,
     HlmCardImports,
     HlmCheckboxImports,
     HlmSkeletonImports,
     CleanupPanel,
     PlaylistCover,
+    RemoveTracks,
     SincePipe,
     SortHeader,
     TrackPreview,
@@ -82,11 +82,14 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
       <section hlmCard>
         <div hlmCardHeader class="flex flex-wrap items-center justify-between gap-2">
           <h2 hlmCardTitle>Titres</h2>
-          @if (rules()) {
-            <button hlmBtn size="xs" variant="ghost" (click)="rules.set(null)">Fermer le nettoyage</button>
-          } @else {
-            <button hlmBtn size="xs" variant="outline" (click)="rules.set(presets[0].rules)">Nettoyer</button>
-          }
+          <div class="flex gap-1">
+            <a hlmBtn size="xs" variant="ghost" [routerLink]="['/playlists', id(), 'doublons']">Doublons</a>
+            @if (rules()) {
+              <button hlmBtn size="xs" variant="ghost" (click)="rules.set(null)">Fermer le nettoyage</button>
+            } @else {
+              <button hlmBtn size="xs" variant="outline" (click)="rules.set(presets[0].rules)">Nettoyer</button>
+            }
+          </div>
         </div>
         <div hlmCardContent>
           @if (rules(); as r) {
@@ -100,35 +103,12 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                   <span class="text-muted-foreground">({{ excluded().size | number }} décochés)</span>
                 }
               </p>
-              <hlm-alert-dialog>
-                <button
-                  hlmAlertDialogTrigger
-                  hlmBtn
-                  size="sm"
-                  variant="destructive"
-                  [disabled]="!selected().length || removing()"
-                >
-                  {{ removing() ? 'Retrait en cours…' : 'Retirer ' + (selected().length | number) + ' titres' }}
-                </button>
-                <hlm-alert-dialog-content *hlmAlertDialogPortal="let ctx">
-                  <hlm-alert-dialog-header>
-                    <h2 hlmAlertDialogTitle>
-                      Retirer {{ selected().length | number }} titres
-                      {{ isLiked() ? 'de tes likes' : 'de « ' + playlist.value()?.name + ' »' }} ?
-                    </h2>
-                    <p hlmAlertDialogDescription>
-                      Ils sont d'abord copiés dans ta playlist « Spotylist · Corbeille », et notés dans le
-                      journal : tu pourras les remettre en place.
-                    </p>
-                  </hlm-alert-dialog-header>
-                  <hlm-alert-dialog-footer>
-                    <button hlmAlertDialogCancel variant="outline">Annuler</button>
-                    <button hlmAlertDialogAction variant="destructive" (click)="ctx.close(); remove()">
-                      Retirer
-                    </button>
-                  </hlm-alert-dialog-footer>
-                </hlm-alert-dialog-content>
-              </hlm-alert-dialog>
+              <app-remove-tracks
+                [playlistId]="id()"
+                [playlistName]="playlist.value()?.name"
+                [positions]="selectedPositions()"
+                (done)="removed($event)"
+              />
             </div>
           }
 
@@ -235,8 +215,6 @@ export class PlaylistPage {
   protected readonly tracks = this.api.tracks(this.id);
   private readonly history = inject(HistoryApi).summary();
 
-  protected readonly isLiked = computed(() => this.id() === LIKED_PLAYLIST_ID);
-
   protected readonly duration = computed(() => {
     const minutes = Math.round((this.playlist.value()?.durationMs ?? 0) / 60_000);
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
@@ -284,7 +262,7 @@ export class PlaylistPage {
   });
   protected readonly shownRows = computed(() => this.rows().slice(0, this.shown()));
 
-  protected readonly removing = signal(false);
+  protected readonly selectedPositions = computed(() => this.selected().map((track) => track.position));
   protected readonly outcome = signal<string | null>(null);
 
   constructor() {
@@ -313,25 +291,10 @@ export class PlaylistPage {
     this.excluded.set(new Set(excluded ? this.candidates().map((track) => track.position) : []));
   }
 
-  protected remove(): void {
-    this.removing.set(true);
-    this.outcome.set(null);
-    const positions = this.selected().map((track) => track.position);
-    const done = () => {
-      this.removing.set(false);
-      this.excluded.set(new Set());
-      this.playlist.reload();
-      this.tracks.reload();
-    };
-    this.api.remove(this.id(), positions).subscribe({
-      next: ({ removed }) => {
-        this.outcome.set(`${removed} titres retirés, et mis dans la corbeille.`);
-        done();
-      },
-      error: () => {
-        this.outcome.set('Le retrait s\'est interrompu : les titres déjà retirés sont dans la corbeille.');
-        done();
-      },
-    });
+  protected removed(message: string): void {
+    this.outcome.set(message);
+    this.excluded.set(new Set());
+    this.playlist.reload();
+    this.tracks.reload();
   }
 }

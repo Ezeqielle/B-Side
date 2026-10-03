@@ -122,6 +122,15 @@ export interface PlaylistTrackStat {
   lastPlayedAt: string | null;
 }
 
+/**
+ * Version d'un morceau dans une playlist : single, album, remix… `recording` est la position du premier
+ * titre du même enregistrement, égale pour deux versions identiques.
+ */
+export interface SongVersion {
+  track: PlaylistTrackStat;
+  recording: number;
+}
+
 /** `playlists` : noms des playlists, répétés si le titre y est en double. */
 export interface DuplicateTrack {
   id: string;

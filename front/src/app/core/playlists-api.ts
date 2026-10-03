@@ -7,6 +7,7 @@ import {
   PlaylistOverview,
   PlaylistStat,
   PlaylistTrackStat,
+  SongVersion,
   TrackStat,
 } from './models';
 
@@ -34,6 +35,11 @@ export class PlaylistsApi {
 
   tracks(id: () => string) {
     return playlists<PlaylistTrackStat[]>(() => `/${encodeURIComponent(id())}/tracks`);
+  }
+
+  /** Versions d'un même morceau, par groupe d'au moins deux, dans l'ordre de la playlist. */
+  versions(id: () => string) {
+    return playlists<SongVersion[][]>(() => `/${encodeURIComponent(id())}/versions`);
   }
 
   duplicates() {

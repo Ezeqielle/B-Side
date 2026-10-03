@@ -16,7 +16,7 @@ export class StatsApi {
     return stats<MonthStat[]>('timeline', filter);
   }
 
-  tracks(filter: Signal<PlayFilter>, limit: number) {
+  tracks(filter: Signal<PlayFilter | undefined>, limit: number) {
     return stats<TrackStat[]>('tracks', filter, limit);
   }
 
@@ -29,9 +29,13 @@ export class StatsApi {
   }
 }
 
-function stats<T>(path: string, filter: Signal<PlayFilter>, limit?: number) {
+/** Sans filtre (`undefined`), rien n'est chargé. */
+function stats<T>(path: string, filter: Signal<PlayFilter | undefined>, limit?: number) {
   return apiResource<T>(
-    () => ({ url: `/api/stats/${path}`, params: { ...filter(), limit, tz: TIMEZONE } }),
+    () => {
+      const f = filter();
+      return f && { url: `/api/stats/${path}`, params: { ...f, limit, tz: TIMEZONE } };
+    },
     { keepPrevious: true },
   );
 }

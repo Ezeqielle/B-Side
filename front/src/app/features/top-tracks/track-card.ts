@@ -2,6 +2,9 @@ import { Component, input } from '@angular/core';
 import { Track } from '../../core/models';
 import { PreviewDirective } from '../../core/preview.directive';
 
+/** Ce qu'affiche la carte : un titre Spotify ou un titre de l'historique. */
+export type CardTrack = Pick<Track, 'id' | 'name' | 'artists' | 'album' | 'imageUrl'>;
+
 @Component({
   selector: 'app-track-card',
   imports: [PreviewDirective],
@@ -32,6 +35,6 @@ import { PreviewDirective } from '../../core/preview.directive';
   `,
 })
 export class TrackCard {
-  readonly track = input.required<Track>();
+  readonly track = input.required<CardTrack>();
   readonly rank = input.required<number>();
 }

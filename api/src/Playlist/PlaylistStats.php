@@ -11,6 +11,9 @@ use Doctrine\DBAL\Connection;
  *
  * Un même morceau a souvent plusieurs ids Spotify (single, album, compilation) : un titre de playlist
  * et une écoute sont rapprochés par leur nom et leur artiste, sans tenir compte de la casse.
+ *
+ * Les titres likés (Playlist::LIKED) comptent comme une playlist, sauf dans le nombre de playlists et pour
+ * les doublons : sinon, chaque titre liké rangé dans une playlist serait un doublon.
  */
 final readonly class PlaylistStats
 {
@@ -44,13 +47,14 @@ final readonly class PlaylistStats
         $playlists = $this->connection->fetchAssociative(<<<'SQL'
             SELECT COUNT(*) FILTER (WHERE readable) AS readable, COUNT(*) FILTER (WHERE NOT readable) AS unreadable
             FROM playlist
-            WHERE user_id = :user
-            SQL, ['user' => $user->getId()]);
+            WHERE user_id = :user AND spotify_id <> :liked
+            SQL, ['user' => $user->getId(), 'liked' => Playlist::LIKED]);
 
         /** @var array{tracks: int, never_played: int, duplicates: int} $songs */
         $songs = $this->connection->fetchAssociative('WITH ' . self::LISTENED . <<<'SQL'
             , songs AS (
-                SELECT lower(t.name) AS name, lower(t.artist_name) AS artist, COUNT(*) AS copies
+                SELECT lower(t.name) AS name, lower(t.artist_name) AS artist,
+                    COUNT(*) FILTER (WHERE pl.spotify_id <> :liked) AS copies
                 FROM playlist pl
                 INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
                 INNER JOIN track t ON t.id = pt.track_id
@@ -62,7 +66,7 @@ final readonly class PlaylistStats
                 COUNT(*) FILTER (WHERE s.copies > 1) AS duplicates
             FROM songs s
             LEFT JOIN listened l ON l.name = s.name AND l.artist = s.artist
-            SQL, ['user' => $user->getId()]);
+            SQL, ['user' => $user->getId(), 'liked' => Playlist::LIKED]);
 
         return new PlaylistOverview(
             syncedAt: $user->getPlaylistsSyncedAt(),
@@ -163,12 +167,12 @@ final readonly class PlaylistStats
             FROM playlist pl
             INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
             INNER JOIN track t ON t.id = pt.track_id
-            WHERE pl.user_id = :user AND pl.readable
+            WHERE pl.user_id = :user AND pl.readable AND pl.spotify_id <> :liked
             GROUP BY lower(t.name), lower(t.artist_name)
             HAVING COUNT(*) > 1
             ORDER BY COUNT(*) DESC, lower(MIN(t.name))
             LIMIT :limit
-            SQL, ['user' => $user->getId(), 'limit' => $limit]);
+            SQL, ['user' => $user->getId(), 'liked' => Playlist::LIKED, 'limit' => $limit]);
 
         return array_map(static fn (array $row): DuplicateTrack => new DuplicateTrack(
             id: $row['id'],

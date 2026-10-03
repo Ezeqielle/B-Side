@@ -24,6 +24,7 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
  * - Mix : « song a » sous un autre id (autre album), Song C
  * - Découvertes : suivie, d'un autre utilisateur
  * - Collab : collaborative, mais Spotify en refuse le contenu
+ * - Titres likés : Song A et Song C
  */
 class PlaylistControllerTest extends WebTestCase
 {
@@ -39,12 +40,19 @@ class PlaylistControllerTest extends WebTestCase
     /** @var array<string, string> snapshot_id de chaque playlist sur Spotify */
     private array $snapshots = ['road-trip' => 'v1', 'mix' => 'v1', 'discover' => 'v1', 'collab' => 'v1'];
 
+    /** @var list<array<string, mixed>>|null titres likés sur Spotify, du plus récent au plus ancien, null si refusés */
+    private ?array $likes;
+
     protected function setUp(): void
     {
         $this->client = static::createClient();
         // Le même conteneur pour les requêtes et les synchros, et donc le même faux Spotify
         $this->client->disableReboot();
         $this->spotify = $this->mockSpotify();
+        $this->likes = [
+            $this->item(self::SONG_A, 'Song A', 'Artist A', '2026-03-01T10:00:00Z', 'track'),
+            $this->item(self::SONG_C, 'Song C', 'Artist C', '2026-01-15T10:00:00Z', 'track'),
+        ];
 
         $em = static::getContainer()->get(EntityManagerInterface::class);
         // Écoutes et playlists sont supprimées avec l'utilisateur (ON DELETE CASCADE)
@@ -83,11 +91,11 @@ class PlaylistControllerTest extends WebTestCase
         $overview = $this->get('/api/playlists/overview');
 
         self::assertNotNull($overview['syncedAt']);
-        self::assertSame(2, $overview['playlists']);
+        self::assertSame(2, $overview['playlists'], 'Sans les titres likés');
         self::assertSame(2, $overview['unreadable'], 'Playlist suivie et playlist refusée par Spotify');
         self::assertSame(3, $overview['tracks']);
         self::assertSame(2, $overview['neverPlayed'], 'Song B (écouté moins de 30 s) et Song C');
-        self::assertSame(1, $overview['duplicates']);
+        self::assertSame(1, $overview['duplicates'], 'Song C, et pas Song A, à la fois dans Mix et liké');
     }
 
     public function testPlaylistsList(): void
@@ -95,7 +103,7 @@ class PlaylistControllerTest extends WebTestCase
         $this->sync();
         $playlists = $this->get('/api/playlists');
 
-        self::assertSame(['Mix', 'Road trip'], array_column($playlists, 'name'));
+        self::assertSame(['Mix', 'Road trip', 'Titres likés'], array_column($playlists, 'name'));
 
         [$mix, $roadTrip] = $playlists;
         self::assertSame('mix', $mix['id']);
@@ -129,6 +137,33 @@ class PlaylistControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
     }
 
+    public function testLikedTracksAreAPlaylist(): void
+    {
+        $this->sync();
+
+        $liked = array_column($this->get('/api/playlists'), null, 'id')['liked'];
+        self::assertSame('Jane Doe', $liked['ownerName']);
+        self::assertNull($liked['imageUrl']);
+        self::assertSame(2, $liked['tracks']);
+        self::assertSame(1, $liked['neverPlayed'], 'Song C');
+        self::assertEquals(new \DateTimeImmutable('2026-03-01T10:00:00Z'), new \DateTimeImmutable($liked['lastAddedAt']));
+
+        $tracks = $this->get('/api/playlists/liked/tracks');
+        self::assertSame([self::SONG_A, self::SONG_C], array_column($tracks, 'id'));
+        self::assertSame([2, 0], array_column($tracks, 'plays'));
+    }
+
+    public function testRefusedLikedTracks(): void
+    {
+        $this->likes = null;
+        $this->sync();
+
+        self::assertSame(['Mix', 'Road trip'], array_column($this->get('/api/playlists'), 'name'));
+        self::assertSame(2, $this->get('/api/playlists/overview')['unreadable'], 'Les likes ne sont pas une playlist suivie');
+        $this->client->request('GET', '/api/playlists/liked/tracks');
+        self::assertResponseStatusCodeSame(404);
+    }
+
     public function testDuplicatesAndTracksMissingFromPlaylists(): void
     {
         self::assertSame([self::SONG_A], array_column($this->get('/api/playlists/missing'), 'id'));
@@ -150,8 +185,24 @@ class PlaylistControllerTest extends WebTestCase
 
         $this->snapshots['mix'] = 'v2';
         unset($this->snapshots['road-trip']);
-        self::assertSame(2, $this->sync(), 'La liste, puis le contenu de Mix seulement');
-        self::assertSame(['Mix'], array_column($this->get('/api/playlists'), 'name'));
+        self::assertSame(3, $this->sync(), 'La liste, le contenu de Mix seulement, et la première page des likes');
+        self::assertSame(['Mix', 'Titres likés'], array_column($this->get('/api/playlists'), 'name'));
+    }
+
+    public function testLikedTracksAreOnlyReadAgainWhenTheyChange(): void
+    {
+        $this->likes = array_map($this->like(...), range(1, 60));
+        $this->sync();
+
+        self::assertSame(2, $this->sync(), 'La liste des playlists, et la première page des likes');
+
+        array_pop($this->likes);
+        self::assertSame(3, $this->sync(), 'Like retiré : relecture complète, en réutilisant la première page');
+        self::assertCount(59, $this->get('/api/playlists/liked/tracks'));
+
+        array_unshift($this->likes, $this->like(61));
+        self::assertSame(3, $this->sync(), 'Like ajouté');
+        self::assertSame($this->like(61)['track']['id'], $this->get('/api/playlists/liked/tracks')[0]['id']);
     }
 
     /**
@@ -168,7 +219,7 @@ class PlaylistControllerTest extends WebTestCase
     private function mockSpotify(): MockHttpClient
     {
         $mock = new MockHttpClient(fn (string $method, string $url): JsonMockResponse => match (strtok($url, '?')) {
-            'https://api.spotify.com/v1/me/playlists' => $this->page(array_map(fn (string $id): array => [
+            'https://api.spotify.com/v1/me/playlists' => $this->page($url, array_map(fn (string $id): array => [
                 'id' => $id,
                 'name' => ['road-trip' => 'Road trip', 'mix' => 'Mix', 'discover' => 'Découvertes', 'collab' => 'Collab'][$id],
                 'owner' => \in_array($id, ['road-trip', 'mix'], true)
@@ -178,16 +229,17 @@ class PlaylistControllerTest extends WebTestCase
                 'snapshot_id' => $this->snapshots[$id],
                 'images' => [],
             ], array_keys($this->snapshots))),
-            'https://api.spotify.com/v1/playlists/road-trip/items' => $this->page([
+            'https://api.spotify.com/v1/playlists/road-trip/items' => $this->page($url, [
                 $this->item(self::SONG_B, 'Song B', 'Artist B', '2026-01-01T10:00:00Z'),
                 $this->item(self::SONG_C, 'Song C', 'Artist C', '2026-02-01T10:00:00Z'),
                 ['is_local' => true, 'added_at' => '2026-02-01T10:00:00Z', 'item' => ['type' => 'track', 'id' => null, 'name' => 'Démo']],
             ]),
-            'https://api.spotify.com/v1/playlists/mix/items' => $this->page([
+            'https://api.spotify.com/v1/playlists/mix/items' => $this->page($url, [
                 $this->item(self::SONG_A_OTHER_ALBUM, 'song a', 'ARTIST A', '2026-01-01T10:00:00Z'),
                 $this->item(self::SONG_C, 'Song C', 'Artist C', null),
             ]),
-            default => new JsonMockResponse(['error' => ['status' => 403]], ['http_code' => 403]),
+            'https://api.spotify.com/v1/me/tracks' => null !== $this->likes ? $this->page($url, $this->likes) : $this->forbidden(),
+            default => $this->forbidden(),
         }, 'https://api.spotify.com/v1/');
         static::getContainer()->set('spotify.client', $mock);
 
@@ -195,22 +247,39 @@ class PlaylistControllerTest extends WebTestCase
     }
 
     /**
+     * Page demandée par `offset` et `limit`.
+     *
      * @param list<array<string, mixed>> $items
      */
-    private function page(array $items): JsonMockResponse
+    private function page(string $url, array $items): JsonMockResponse
     {
-        return new JsonMockResponse(['items' => $items, 'next' => null, 'total' => \count($items)]);
+        parse_str((string) parse_url($url, \PHP_URL_QUERY), $query);
+        $offset = (int) ($query['offset'] ?? 0);
+        $limit = (int) ($query['limit'] ?? 20);
+
+        return new JsonMockResponse([
+            'items' => \array_slice($items, $offset, $limit),
+            'next' => $offset + $limit < \count($items) ? 'next-page' : null,
+            'total' => \count($items),
+        ]);
+    }
+
+    private function forbidden(): JsonMockResponse
+    {
+        return new JsonMockResponse(['error' => ['status' => 403]], ['http_code' => 403]);
     }
 
     /**
+     * @param 'item'|'track' $key `item` dans le contenu d'une playlist, `track` dans les titres likés
+     *
      * @return array<string, mixed>
      */
-    private function item(string $id, string $name, string $artist, ?string $addedAt): array
+    private function item(string $id, string $name, string $artist, ?string $addedAt, string $key = 'item'): array
     {
         return [
             'added_at' => $addedAt,
             'is_local' => false,
-            'item' => [
+            $key => [
                 'type' => 'track',
                 'id' => $id,
                 'uri' => 'spotify:track:' . $id,
@@ -220,6 +289,14 @@ class PlaylistControllerTest extends WebTestCase
                 'duration_ms' => 200000,
             ],
         ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function like(int $i): array
+    {
+        return $this->item(\sprintf('L%021d', $i), 'Like ' . $i, 'Artist', '2026-01-01T10:00:00Z', 'track');
     }
 
     private function userId(): int

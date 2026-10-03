@@ -48,7 +48,8 @@ Tables :
 
 1. `POST /api/playlists/sync` envoie `SyncPlaylists` au worker. `App\Playlist\PlaylistSync` lit `/me/playlists`, puis le contenu des seules playlists dont le `snapshot_id` a changé (50 titres par requête).
 2. Spotify ne donne le contenu qu'au propriétaire et aux collaborateurs : les playlists suivies sont gardées avec `readable = false`, sans contenu. Un refus (403) n'est redemandé qu'à la modification suivante.
-3. Les playlists retirées de la bibliothèque sont supprimées. `user.playlists_synced_at` change à la fin de chaque synchro : le front s'en sert pour savoir qu'elle est terminée.
+3. Les titres likés (`GET /me/tracks`) sont rangés comme une playlist à part, `spotify_id = 'liked'` (`Playlist::LIKED`). Sans `snapshot_id`, leur première page (total et 50 derniers likes) sert d'empreinte : une seule requête quand rien n'a changé, sinon relecture complète en la réutilisant. Un 403 ou 404 les passe en `readable = false`.
+4. Les playlists retirées de la bibliothèque sont supprimées. `user.playlists_synced_at` change à la fin de chaque synchro : le front s'en sert pour savoir qu'elle est terminée.
 
 Tables :
 
@@ -60,6 +61,7 @@ Stats (`App\Playlist\PlaylistStats`) : `GET /api/playlists`, `/overview`, `/{id}
 - Un titre de playlist et une écoute sont rapprochés par nom et artiste, sans la casse : un même morceau a souvent plusieurs ids Spotify (single, album, compilation).
 - L'historique donne l'artiste de l'album : côté playlist, on prend aussi celui de l'album.
 - Comme pour les stats d'écoute, un titre n'est « écouté » qu'au-delà de 30 secondes.
+- Les titres likés comptent comme une playlist, sauf dans le nombre de playlists de `/overview` et pour les doublons.
 
 ## Services Docker
 

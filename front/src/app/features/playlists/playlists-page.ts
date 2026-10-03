@@ -73,7 +73,7 @@ const POLL_MAX = 90;
       <p class="text-destructive" role="alert">Impossible de récupérer tes playlists pour le moment.</p>
     } @else if (overview.hasValue() && playlists.hasValue()) {
       @let o = overview.value();
-      @if (!o.playlists && !syncing()) {
+      @if (!playlists.value().length && !syncing()) {
         <p class="text-muted-foreground">
           @if (o.syncedAt) {
             Aucune playlist dont Spotify donne le contenu : seules celles que tu as créées ou dont tu es

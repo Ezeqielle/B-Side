@@ -2,7 +2,7 @@ import { DecimalPipe, PercentPipe } from '@angular/common';
 import { Component, computed, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth.service';
-import { PlaylistStat } from '../../core/models';
+import { LIKED_PLAYLIST_ID, PlaylistStat } from '../../core/models';
 import { PlaylistCover } from './playlist-cover';
 import { SincePipe } from './since';
 import { Sort, SortHeader, sortRows } from './sort-header';
@@ -41,7 +41,7 @@ const COLUMNS: Record<string, (playlist: PlaylistStat) => string | number | null
             <tr class="hover:bg-muted/50 border-b last:border-0">
               <td class="py-2 pr-4">
                 <a [routerLink]="playlist.id" class="flex min-w-0 items-center gap-3">
-                  <app-playlist-cover class="size-10" [name]="playlist.name" [imageUrl]="playlist.imageUrl" />
+                  <app-playlist-cover class="size-10" [playlist]="playlist" />
                   <span class="min-w-0">
                     <span class="block max-w-64 truncate font-medium hover:underline">{{ playlist.name }}</span>
                     @if (playlist.ownerName !== me()) {
@@ -82,8 +82,11 @@ export class PlaylistTable {
   protected readonly me = computed(() => this.auth.user()?.displayName);
   protected readonly sort = signal<Sort>({ key: 'name', desc: false });
 
+  /** Les titres likés restent en tête, quel que soit le tri. */
   protected readonly rows = computed(() => {
     const { key, desc } = this.sort();
-    return sortRows(this.playlists(), COLUMNS[key], desc);
+    const rows = sortRows(this.playlists(), COLUMNS[key], desc);
+    const isLiked = (p: PlaylistStat) => p.id === LIKED_PLAYLIST_ID;
+    return [...rows.filter(isLiked), ...rows.filter((p) => !isLiked(p))];
   });
 }

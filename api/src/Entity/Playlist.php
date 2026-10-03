@@ -13,6 +13,9 @@ use Doctrine\ORM\Mapping as ORM;
 #[ORM\UniqueConstraint(columns: ['user_id', 'spotify_id'])]
 class Playlist
 {
+    /** Id des titres likés, rangés comme une playlist. Un vrai id Spotify fait 22 caractères : pas de collision. */
+    public const string LIKED = 'liked';
+
     #[ORM\Id]
     #[ORM\GeneratedValue]
     #[ORM\Column]
@@ -94,6 +97,18 @@ class Playlist
     }
 
     /**
+     * Les titres likés ne sont pas une playlist pour Spotify : nom et propriétaire sont fixés ici.
+     */
+    public function updateAsLiked(): static
+    {
+        $this->name = 'Titres likés';
+        $this->ownerName = mb_substr($this->user->getDisplayName() ?? $this->user->getSpotifyId(), 0, 255);
+        $this->imageUrl = null;
+
+        return $this;
+    }
+
+    /**
      * Contenu enregistré dans cette version.
      */
     public function markSynced(string $snapshotId): static
@@ -106,8 +121,9 @@ class Playlist
 
     /**
      * Spotify ne donne pas le contenu de cette version : on ne redemandera que si elle change.
+     * Sans version (null), on redemandera à la prochaine synchro.
      */
-    public function markUnreadable(string $snapshotId): static
+    public function markUnreadable(?string $snapshotId): static
     {
         $this->readable = false;
         $this->snapshotId = $snapshotId;

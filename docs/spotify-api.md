@@ -18,6 +18,7 @@
 - Les 50 derniers titres écoutés (`/me/player/recently-played`)
 - Titres likés, playlists de l'utilisateur, création de playlists (`POST /me/playlists`), ajout et retrait de titres (`/playlists/{id}/items`)
 - Ajout et suppression de likes via `/me/library`, qui remplace `/me/tracks`
+- Lecture des titres likés via `GET /me/tracks` : annoncé supprimé en mode développement par le guide de migration de février 2026, mais répond encore (testé le 3 octobre 2026). Peut disparaître sans prévenir.
 - ISRC des titres (`external_ids`), rétabli en mars 2026
 - Web Playback SDK (lecture complète, Premium)
 

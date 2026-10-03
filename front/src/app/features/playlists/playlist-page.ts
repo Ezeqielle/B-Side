@@ -54,7 +54,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 
     @if (playlist(); as p) {
       <div class="mb-6 flex items-center gap-4">
-        <app-playlist-cover class="size-20 sm:size-24" [name]="p.name" [imageUrl]="p.imageUrl" />
+        <app-playlist-cover class="size-20 sm:size-24" [playlist]="p" />
         <div class="min-w-0">
           <h1 class="truncate text-2xl font-bold tracking-tight">{{ p.name }}</h1>
           <p class="text-muted-foreground text-sm">

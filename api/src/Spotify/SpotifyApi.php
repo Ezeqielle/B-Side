@@ -6,6 +6,7 @@ use App\Entity\User;
 use App\Spotify\Model\Artist;
 use App\Spotify\Model\Playlist;
 use App\Spotify\Model\PlaylistItem;
+use App\Spotify\Model\SavedTracksPage;
 use App\Spotify\Model\Track;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -64,21 +65,41 @@ class SpotifyApi
      */
     public function getPlaylistItems(User $user, string $playlistId): array
     {
-        $items = array_map(PlaylistItem::fromApi(...), $this->getAllPages($user, 'playlists/' . rawurlencode($playlistId) . '/items'));
-
-        return array_values(array_filter($items));
+        return PlaylistItem::listFromApi($this->getAllPages($user, 'playlists/' . rawurlencode($playlistId) . '/items'));
     }
 
     /**
-     * Parcourt une liste paginée, 50 éléments par requête (le maximum).
+     * Première page des titres likés : les 50 plus récents, et leur nombre.
+     */
+    public function getSavedTracksPage(User $user): SavedTracksPage
+    {
+        return SavedTracksPage::fromApi($this->get($user, 'me/tracks', ['limit' => self::PAGE_SIZE]));
+    }
+
+    /**
+     * Tous les titres likés, du plus récent au plus ancien, en reprenant après leur première page.
+     *
+     * @return list<PlaylistItem>
+     */
+    public function getSavedTracks(User $user, SavedTracksPage $first): array
+    {
+        if (!$first->hasNext) {
+            return $first->items;
+        }
+
+        return [...$first->items, ...PlaylistItem::listFromApi($this->getAllPages($user, 'me/tracks', self::PAGE_SIZE))];
+    }
+
+    /**
+     * Parcourt une liste paginée à partir de `$offset`, 50 éléments par requête (le maximum).
      *
      * @return list<array<string, mixed>>
      */
-    private function getAllPages(User $user, string $path): array
+    private function getAllPages(User $user, string $path, int $offset = 0): array
     {
         $items = [];
         do {
-            $page = $this->get($user, $path, ['limit' => self::PAGE_SIZE, 'offset' => \count($items)]);
+            $page = $this->get($user, $path, ['limit' => self::PAGE_SIZE, 'offset' => $offset + \count($items)]);
             array_push($items, ...$page['items']);
         } while (null !== $page['next'] && [] !== $page['items']);
 

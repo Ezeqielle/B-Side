@@ -80,6 +80,7 @@ export interface HourStat {
  */
 export interface PlaylistOverview {
   syncedAt: string | null;
+  /** Sans les titres likés. */
   playlists: number;
   /** Playlists suivies dont Spotify ne donne pas le contenu. */
   unreadable: number;
@@ -88,7 +89,10 @@ export interface PlaylistOverview {
   duplicates: number;
 }
 
-/** `id` : id Spotify. `skipRate` : part des écoutes de ses titres qui ont été passées. */
+/** Id des titres likés, rangés comme une playlist. */
+export const LIKED_PLAYLIST_ID = 'liked';
+
+/** `id` : id Spotify, ou `LIKED_PLAYLIST_ID`. `skipRate` : part des écoutes de ses titres qui ont été passées. */
 export interface PlaylistStat {
   id: string;
   name: string;

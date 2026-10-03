@@ -92,16 +92,16 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
         <div hlmCardContent>
           <div class="-mx-6 overflow-x-auto px-6">
             <table class="w-full text-sm">
-              <thead class="text-muted-foreground border-b text-left text-xs">
+              <thead class="text-muted-foreground border-b text-left text-xs whitespace-nowrap">
                 <tr>
                   <th class="w-10 pb-2 text-right" appSortHeader="position" [desc]="false" [(sort)]="sort">#</th>
                   <th class="pb-2 pl-3" appSortHeader="name" [desc]="false" [(sort)]="sort">Titre</th>
-                  <th class="pb-2 text-right" appSortHeader="plays" [(sort)]="sort">Écoutes</th>
-                  <th class="hidden pb-2 text-right sm:table-cell" appSortHeader="skipRate" [(sort)]="sort">Passés</th>
-                  <th class="pb-2 text-right" appSortHeader="lastPlayedAt" [desc]="false" [(sort)]="sort">
+                  <th class="pb-2 pl-4 text-right" appSortHeader="plays" [(sort)]="sort">Écoutes</th>
+                  <th class="hidden pb-2 pl-4 text-right sm:table-cell" appSortHeader="skipRate" [(sort)]="sort">Passés</th>
+                  <th class="pb-2 pl-4 text-right" appSortHeader="lastPlayedAt" [desc]="false" [(sort)]="sort">
                     Dernière écoute
                   </th>
-                  <th class="hidden pb-2 text-right md:table-cell" appSortHeader="addedAt" [desc]="false" [(sort)]="sort">
+                  <th class="hidden pb-2 pl-4 text-right md:table-cell" appSortHeader="addedAt" [desc]="false" [(sort)]="sort">
                     Ajouté le
                   </th>
                 </tr>
@@ -110,7 +110,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                 @for (track of shownRows(); track track.position) {
                   <tr class="border-b last:border-0">
                     <td class="text-muted-foreground py-2 text-right tabular-nums">{{ track.position + 1 }}</td>
-                    <td class="max-w-0 py-2 pr-4 pl-3">
+                    <td class="w-full max-w-0 py-2 pr-4 pl-3">
                       <div class="flex items-center gap-3">
                         <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
                         <div class="min-w-0">
@@ -119,14 +119,14 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                         </div>
                       </div>
                     </td>
-                    <td class="py-2 text-right tabular-nums" [class.text-muted-foreground]="!track.plays">
+                    <td class="py-2 pl-4 text-right tabular-nums" [class.text-muted-foreground]="!track.plays">
                       {{ track.plays | number }}
                     </td>
-                    <td class="hidden py-2 text-right tabular-nums sm:table-cell">
+                    <td class="hidden py-2 pl-4 text-right tabular-nums sm:table-cell">
                       {{ track.plays ? (track.skipRate | percent) : '—' }}
                     </td>
-                    <td class="py-2 text-right whitespace-nowrap">{{ track.lastPlayedAt | since: 'jamais' }}</td>
-                    <td class="text-muted-foreground hidden py-2 text-right whitespace-nowrap md:table-cell">
+                    <td class="py-2 pl-4 text-right whitespace-nowrap">{{ track.lastPlayedAt | since: 'jamais' }}</td>
+                    <td class="text-muted-foreground hidden py-2 pl-4 text-right whitespace-nowrap md:table-cell">
                       {{ track.addedAt ? (track.addedAt | date: 'd MMM yyyy') : '—' }}
                     </td>
                   </tr>

@@ -8,8 +8,7 @@ framework:
             failed: 'doctrine://default?queue_name=failed'
 
         routing:
-            # Route your messages to the transports
-            # 'App\Message\YourMessage': async
+            'App\Message\ImportPlays': async
 
 when@test:
     framework:

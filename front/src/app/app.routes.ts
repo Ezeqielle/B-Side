@@ -18,6 +18,11 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/top-tracks/top-tracks-page').then((m) => m.TopTracksPage),
       },
+      {
+        path: 'history',
+        loadComponent: () =>
+          import('./features/history/history-page').then((m) => m.HistoryPage),
+      },
     ],
   },
   { path: '**', redirectTo: '' },

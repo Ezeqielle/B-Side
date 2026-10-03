@@ -23,6 +23,18 @@ Avantages : pas de configuration CORS, session en cookie HttpOnly, le callback O
 
 Les tokens Spotify sont stockés en base (`user`) et ne sont jamais envoyés au front.
 
+## Import de l'historique étendu
+
+1. Le front envoie chaque `Streaming_History_*.json` sur `POST /api/history`, un fichier par requête (32 Mo max, voir `10-app.ini`).
+2. `App\History\StreamingHistoryParser` valide le fichier (422 sinon) et ne garde que les titres : pas de podcasts, ni d'IP, de pays ou d'appareil.
+3. Les écoutes partent par lots de 1000 dans Messenger (`ImportPlays`). Le worker les insère en une requête par table et ignore les doublons : l'export en contient, et on peut réimporter sans risque.
+4. `GET /api/history` résume ce qui est importé.
+
+Tables :
+
+- `track` : partagée entre utilisateurs, clé = id Spotify du titre
+- `play` : une écoute, unique sur `(user_id, played_at, track_id)`. `played_at` est la fin de l'écoute (UTC dans l'export).
+
 ## Services Docker
 
 - `php` : FrankenPHP (Symfony en mode worker + Caddy). Au démarrage, il lance `composer install` si besoin et joue les migrations.

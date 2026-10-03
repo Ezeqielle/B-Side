@@ -13,6 +13,7 @@ import { AuthService } from '../core/auth.service';
         <a routerLink="/" class="text-lg font-bold tracking-tight">Spotylist</a>
         <nav class="text-muted-foreground flex gap-4 text-sm">
           <a routerLink="/top" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Tops</a>
+          <a routerLink="/history" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Historique</a>
         </nav>
         <div class="ml-auto flex items-center gap-3">
           @if (auth.user(); as user) {

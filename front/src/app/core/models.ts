@@ -17,3 +17,11 @@ export interface Track {
 
 /** Périodes des tops Spotify : ~4 semaines, ~6 mois, ~1 an. */
 export type TimeRange = 'short_term' | 'medium_term' | 'long_term';
+
+/** Historique d'écoute étendu importé. Dates ISO 8601. */
+export interface HistorySummary {
+  plays: number;
+  tracks: number;
+  firstPlayedAt: string | null;
+  lastPlayedAt: string | null;
+}

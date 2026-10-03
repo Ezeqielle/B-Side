@@ -19,6 +19,10 @@ export const routes: Routes = [
           import('./features/top-tracks/top-tracks-page').then((m) => m.TopTracksPage),
       },
       {
+        path: 'stats',
+        loadComponent: () => import('./features/stats/stats-page').then((m) => m.StatsPage),
+      },
+      {
         path: 'history',
         loadComponent: () =>
           import('./features/history/history-page').then((m) => m.HistoryPage),

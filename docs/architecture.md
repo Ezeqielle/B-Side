@@ -35,6 +35,15 @@ Tables :
 - `track` : partagée entre utilisateurs, clé = id Spotify du titre
 - `play` : une écoute, unique sur `(user_id, played_at, track_id)`. `played_at` est la fin de l'écoute (UTC dans l'export).
 
+## Stats
+
+`GET /api/stats/{overview,tracks,artists,timeline,clock}`, calculées en SQL par `App\Stats\PlayStats` sur les écoutes importées.
+
+- Toutes acceptent un `App\Stats\PlayFilter` en query string : `from`, `to` (jours inclus), `artist`, `tz` (fuseau du navigateur, pour les périodes et les heures). Ce même filtre servira à créer et nettoyer des playlists.
+- Une écoute ne compte qu'au-delà de 30 secondes, comme chez Spotify. Temps d'écoute et taux d'écoutes passées prennent tout en compte.
+- Côté front, le filtre est dans l'URL (`/stats?year=2021&artist=…`) : chaque vue le modifie par un simple lien.
+- Images du podium : `GET /api/artwork/track/{id}` et `/api/artwork/artist?name=…` redirigent vers l'image Spotify (404 sans image). Une requête Spotify par image, gardée 30 jours en cache (`App\Stats\Artwork`).
+
 ## Services Docker
 
 - `php` : FrankenPHP (Symfony en mode worker + Caddy). Au démarrage, il lance `composer install` si besoin et joue les migrations.

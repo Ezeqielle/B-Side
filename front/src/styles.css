@@ -18,6 +18,12 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+  /* Teinte unique des graphiques de stats (une seule série, ou intensité) */
+  --viz: #2a78d6;
+  /* Podium des tops */
+  --gold: #d9a520;
+  --silver: #9ea7b3;
+  --bronze: #b8743d;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.141 0.005 285.823);
@@ -55,6 +61,10 @@
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
+  --viz: #3987e5;
+  --gold: #e8b931;
+  --silver: #b9c1cc;
+  --bronze: #c98650;
   --background: oklch(0.141 0.005 285.823);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.21 0.006 285.885);
@@ -81,6 +91,10 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.552 0.016 285.938);
+}
+
+@theme inline {
+  --color-viz: var(--viz);
 }
 
 @layer base {

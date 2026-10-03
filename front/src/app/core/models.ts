@@ -25,3 +25,51 @@ export interface HistorySummary {
   firstPlayedAt: string | null;
   lastPlayedAt: string | null;
 }
+
+/** Sélection d'écoutes, commune à toutes les stats. Dates `yyyy-MM-dd`, bornes incluses. */
+export interface PlayFilter {
+  from?: string;
+  to?: string;
+  artist?: string;
+}
+
+/** Une écoute ne compte qu'au-delà de 30 secondes, `msPlayed` inclut tout. */
+export interface StatsOverview {
+  plays: number;
+  msPlayed: number;
+  tracks: number;
+  artists: number;
+  skipRate: number;
+}
+
+export interface TrackStat {
+  id: string;
+  name: string;
+  artistName: string;
+  albumName: string;
+  plays: number;
+  msPlayed: number;
+  skipRate: number;
+  lastPlayedAt: string;
+}
+
+export interface ArtistStat {
+  name: string;
+  plays: number;
+  msPlayed: number;
+  tracks: number;
+}
+
+/** `month` au format `yyyy-MM`. */
+export interface MonthStat {
+  month: string;
+  plays: number;
+  msPlayed: number;
+}
+
+/** `weekday` : 1 = lundi … 7 = dimanche. */
+export interface HourStat {
+  weekday: number;
+  hour: number;
+  plays: number;
+}

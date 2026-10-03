@@ -3,6 +3,7 @@
 namespace App\Spotify;
 
 use App\Entity\User;
+use App\Spotify\Model\Artist;
 use App\Spotify\Model\Track;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -30,6 +31,16 @@ class SpotifyApi
         ]);
 
         return array_values(array_map(Track::fromApi(...), $data['items']));
+    }
+
+    public function getTrack(User $user, string $id): Track
+    {
+        return Track::fromApi($this->get($user, 'tracks/' . rawurlencode($id)));
+    }
+
+    public function getArtist(User $user, string $id): Artist
+    {
+        return Artist::fromApi($this->get($user, 'artists/' . rawurlencode($id)));
     }
 
     /**

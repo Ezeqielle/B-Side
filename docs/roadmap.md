@@ -6,12 +6,13 @@
 - Connexion Spotify, session, rafraîchissement du token
 - Écran des tops titres (3 périodes)
 - Import de l'historique étendu : upload des JSON, traitement par Messenger, tables `track` et `play`
+- Stats sur l'historique : chiffres clés, écoutes par mois, tops titres et artistes, heures d'écoute, filtrables par année et artiste
 
 ## Étapes suivantes
 
 1. **Extraits au survol** : endpoint `/api/preview/{isrc}` (Deezer, avec cache), directive Angular sur les pochettes et un seul lecteur audio partagé avec fondu
-2. **Stats détaillées** et **nettoyage des likes** (jamais écoutés, souvent passés), suppression via `/me/library`
-3. **Tops par année**, mix et création de playlists
+2. **Nettoyage des likes et des playlists** (jamais écoutés, souvent passés), suppression via `/me/library`
+3. **Création de playlists** à partir d'un `PlayFilter` (`PlayStats::topTracks()`), mix
 4. **Exploration de titres proches** via Last.fm
 
 ## Idées

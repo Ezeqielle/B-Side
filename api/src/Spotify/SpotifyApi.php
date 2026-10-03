@@ -4,6 +4,8 @@ namespace App\Spotify;
 
 use App\Entity\User;
 use App\Spotify\Model\Artist;
+use App\Spotify\Model\Playlist;
+use App\Spotify\Model\PlaylistItem;
 use App\Spotify\Model\Track;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
@@ -13,6 +15,8 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
  */
 class SpotifyApi
 {
+    private const int PAGE_SIZE = 50;
+
     public function __construct(
         #[Target('spotify.client')]
         private readonly HttpClientInterface $spotifyClient,
@@ -41,6 +45,44 @@ class SpotifyApi
     public function getArtist(User $user, string $id): Artist
     {
         return Artist::fromApi($this->get($user, 'artists/' . rawurlencode($id)));
+    }
+
+    /**
+     * Playlists de la bibliothèque : créées, collaboratives ou suivies.
+     *
+     * @return list<Playlist>
+     */
+    public function getPlaylists(User $user): array
+    {
+        return array_map(Playlist::fromApi(...), $this->getAllPages($user, 'me/playlists'));
+    }
+
+    /**
+     * Contenu d'une playlist, dans l'ordre. Spotify ne le donne que si l'utilisateur en est propriétaire ou collaborateur.
+     *
+     * @return list<PlaylistItem>
+     */
+    public function getPlaylistItems(User $user, string $playlistId): array
+    {
+        $items = array_map(PlaylistItem::fromApi(...), $this->getAllPages($user, 'playlists/' . rawurlencode($playlistId) . '/items'));
+
+        return array_values(array_filter($items));
+    }
+
+    /**
+     * Parcourt une liste paginée, 50 éléments par requête (le maximum).
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function getAllPages(User $user, string $path): array
+    {
+        $items = [];
+        do {
+            $page = $this->get($user, $path, ['limit' => self::PAGE_SIZE, 'offset' => \count($items)]);
+            array_push($items, ...$page['items']);
+        } while (null !== $page['next'] && [] !== $page['items']);
+
+        return $items;
     }
 
     /**

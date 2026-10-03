@@ -23,6 +23,16 @@ export const routes: Routes = [
         loadComponent: () => import('./features/stats/stats-page').then((m) => m.StatsPage),
       },
       {
+        path: 'playlists',
+        loadComponent: () =>
+          import('./features/playlists/playlists-page').then((m) => m.PlaylistsPage),
+      },
+      {
+        path: 'playlists/:id',
+        loadComponent: () =>
+          import('./features/playlists/playlist-page').then((m) => m.PlaylistPage),
+      },
+      {
         path: 'history',
         loadComponent: () =>
           import('./features/history/history-page').then((m) => m.HistoryPage),

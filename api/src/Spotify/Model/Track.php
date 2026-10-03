@@ -6,7 +6,8 @@ final readonly class Track
 {
     /**
      * @param list<string> $artists
-     * @param list<string> $artistIds dans le même ordre que $artists
+     * @param list<string> $artistIds   dans le même ordre que $artists
+     * @param string       $albumArtist artiste principal de l'album, celui que retient l'historique d'écoute
      */
     public function __construct(
         public string $id,
@@ -15,6 +16,7 @@ final readonly class Track
         public array $artists,
         public array $artistIds,
         public string $album,
+        public string $albumArtist,
         public ?string $imageUrl,
         public int $durationMs,
         public ?string $isrc,
@@ -33,6 +35,7 @@ final readonly class Track
             artists: array_column($data['artists'], 'name'),
             artistIds: array_column($data['artists'], 'id'),
             album: $data['album']['name'],
+            albumArtist: $data['album']['artists'][0]['name'] ?? $data['artists'][0]['name'] ?? '',
             imageUrl: $data['album']['images'][0]['url'] ?? null,
             durationMs: $data['duration_ms'],
             isrc: $data['external_ids']['isrc'] ?? null,

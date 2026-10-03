@@ -48,35 +48,29 @@ final readonly class PlayStats
      */
     public function topTracks(User $user, PlayFilter $filter, int $limit): array
     {
-        /** @var list<array{id: string, name: string, artist_name: string, album_name: string, plays: int, ms_played: int, skip_rate: string, last_played_at: string}> $rows */
-        $rows = $this->plays($user, $filter)
-            ->select(
-                't.id',
-                't.name',
-                't.artist_name',
-                't.album_name',
-                self::PLAYS . ' AS plays',
-                self::MS_PLAYED . ' AS ms_played',
-                self::SKIP_RATE . ' AS skip_rate',
-                'MAX(p.played_at) AS last_played_at',
-            )
-            ->groupBy('t.id')
-            ->having(self::PLAYS . ' > 0')
-            ->orderBy('plays', 'DESC')
-            ->addOrderBy('ms_played', 'DESC')
-            ->setMaxResults($limit)
-            ->fetchAllAssociative();
+        return $this->rankTracks($this->plays($user, $filter), $limit);
+    }
 
-        return array_map(static fn (array $row): TrackStat => new TrackStat(
-            id: $row['id'],
-            name: $row['name'],
-            artistName: $row['artist_name'],
-            albumName: $row['album_name'],
-            plays: $row['plays'],
-            msPlayed: (int) $row['ms_played'],
-            skipRate: (float) $row['skip_rate'],
-            lastPlayedAt: new \DateTimeImmutable($row['last_played_at']),
-        ), $rows);
+    /**
+     * Titres les plus écoutés qui ne sont dans aucune playlist lisible de l'utilisateur,
+     * rapprochés par nom et artiste comme dans PlaylistStats.
+     *
+     * @return list<TrackStat>
+     */
+    public function topTracksOutsidePlaylists(User $user, PlayFilter $filter, int $limit): array
+    {
+        $query = $this->plays($user, $filter)->andWhere(<<<'SQL'
+            NOT EXISTS (
+                SELECT 1
+                FROM playlist pl
+                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
+                INNER JOIN track pt_t ON pt_t.id = pt.track_id
+                WHERE pl.user_id = p.user_id AND pl.readable
+                    AND lower(pt_t.name) = lower(t.name) AND lower(pt_t.artist_name) = lower(t.artist_name)
+            )
+            SQL);
+
+        return $this->rankTracks($query, $limit);
     }
 
     /**
@@ -153,6 +147,44 @@ final readonly class PlayStats
             weekday: (int) $row['weekday'],
             hour: (int) $row['hour'],
             plays: $row['plays'],
+        ), $rows);
+    }
+
+    /**
+     * Classe les titres de ces écoutes.
+     *
+     * @return list<TrackStat>
+     */
+    private function rankTracks(QueryBuilder $plays, int $limit): array
+    {
+        /** @var list<array{id: string, name: string, artist_name: string, album_name: string, plays: int, ms_played: int, skip_rate: string, last_played_at: string}> $rows */
+        $rows = $plays
+            ->select(
+                't.id',
+                't.name',
+                't.artist_name',
+                't.album_name',
+                self::PLAYS . ' AS plays',
+                self::MS_PLAYED . ' AS ms_played',
+                self::SKIP_RATE . ' AS skip_rate',
+                'MAX(p.played_at) AS last_played_at',
+            )
+            ->groupBy('t.id')
+            ->having(self::PLAYS . ' > 0')
+            ->orderBy('plays', 'DESC')
+            ->addOrderBy('ms_played', 'DESC')
+            ->setMaxResults($limit)
+            ->fetchAllAssociative();
+
+        return array_map(static fn (array $row): TrackStat => new TrackStat(
+            id: $row['id'],
+            name: $row['name'],
+            artistName: $row['artist_name'],
+            albumName: $row['album_name'],
+            plays: $row['plays'],
+            msPlayed: (int) $row['ms_played'],
+            skipRate: (float) $row['skip_rate'],
+            lastPlayedAt: new \DateTimeImmutable($row['last_played_at']),
         ), $rows);
     }
 

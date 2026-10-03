@@ -1,0 +1,256 @@
+import { DecimalPipe, PercentPipe } from '@angular/common';
+import { HttpClient, httpResource } from '@angular/common/http';
+import { Component, computed, effect, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
+import { HlmBadgeImports } from '@spartan-ng/helm/badge';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
+import { firstValueFrom } from 'rxjs';
+import {
+  DuplicateTrack,
+  HistorySummary,
+  PlaylistOverview,
+  PlaylistStat,
+  TrackStat,
+} from '../../core/models';
+import { PlaylistTable } from './playlist-table';
+import { SincePipe } from './since';
+
+/** Attente entre deux vérifications de la fin d'une synchro, et nombre maximum de vérifications. */
+const POLL_MS = 2000;
+const POLL_MAX = 90;
+
+/**
+ * Stats des playlists, croisées avec l'historique d'écoute. Les playlists sont recopiées
+ * depuis Spotify par le worker : la page lance la synchro, puis attend qu'elle se termine.
+ */
+@Component({
+  selector: 'app-playlists-page',
+  imports: [
+    DecimalPipe,
+    PercentPipe,
+    RouterLink,
+    HlmBadgeImports,
+    HlmButtonImports,
+    HlmCardImports,
+    HlmSkeletonImports,
+    PlaylistTable,
+    SincePipe,
+  ],
+  template: `
+    <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight">Tes playlists</h1>
+        <p class="text-muted-foreground text-sm">
+          Croisées avec ton historique : un titre ne compte comme écouté qu'au-delà de 30 secondes.
+        </p>
+      </div>
+      <div class="flex items-center gap-3">
+        <p class="text-muted-foreground text-sm" role="status">
+          @if (syncing()) {
+            Synchronisation avec Spotify…
+          } @else if (syncFailed()) {
+            <span class="text-destructive">La synchronisation a échoué.</span>
+          } @else if (syncedAt(); as date) {
+            Synchronisé {{ date | since }}
+          }
+        </p>
+        <button hlmBtn variant="outline" size="sm" [disabled]="syncing()" (click)="sync()">
+          Synchroniser
+        </button>
+      </div>
+    </div>
+
+    @if (noHistory()) {
+      <p class="bg-muted mb-6 rounded-lg px-4 py-3 text-sm">
+        Sans historique, tous les titres paraissent jamais écoutés :
+        <a routerLink="/history" class="underline">importe ton historique</a> pour des stats justes.
+      </p>
+    }
+
+    @if (overview.error() || playlists.error()) {
+      <p class="text-destructive" role="alert">Impossible de récupérer tes playlists pour le moment.</p>
+    } @else if (overview.hasValue() && playlists.hasValue()) {
+      @let o = overview.value();
+      @if (!o.playlists && !syncing()) {
+        <p class="text-muted-foreground">
+          @if (o.syncedAt) {
+            Aucune playlist dont Spotify donne le contenu : seules celles que tu as créées ou dont tu es
+            collaborateur sont lisibles.
+          } @else {
+            Tes playlists n'ont pas encore été récupérées.
+          }
+        </p>
+      } @else {
+        <div class="grid gap-6 transition-opacity" [class.opacity-60]="syncing()">
+          <dl class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <div class="bg-card rounded-xl border px-4 py-3">
+              <dt class="text-muted-foreground text-sm">Playlists</dt>
+              <dd class="mt-1 text-2xl font-semibold">{{ o.playlists | number }}</dd>
+              @if (o.unreadable) {
+                <dd class="text-muted-foreground text-xs">
+                  + {{ o.unreadable | number }} suivies, sans accès au contenu
+                </dd>
+              }
+            </div>
+            <div class="bg-card rounded-xl border px-4 py-3">
+              <dt class="text-muted-foreground text-sm">Titres différents</dt>
+              <dd class="mt-1 text-2xl font-semibold">{{ o.tracks | number }}</dd>
+            </div>
+            <div class="bg-card rounded-xl border px-4 py-3">
+              <dt class="text-muted-foreground text-sm">Jamais écoutés</dt>
+              <dd class="mt-1 text-2xl font-semibold">
+                {{ o.neverPlayed | number }}
+                @if (o.tracks) {
+                  <span class="text-muted-foreground text-base font-normal">
+                    ({{ o.neverPlayed / o.tracks | percent }})
+                  </span>
+                }
+              </dd>
+            </div>
+            <div class="bg-card rounded-xl border px-4 py-3">
+              <dt class="text-muted-foreground text-sm">En double</dt>
+              <dd class="mt-1 text-2xl font-semibold">{{ o.duplicates | number }}</dd>
+            </div>
+          </dl>
+
+          <section hlmCard>
+            <div hlmCardHeader>
+              <h2 hlmCardTitle>Par playlist</h2>
+              <p hlmCardDescription>
+                Clique sur une colonne pour trier, et sur une playlist pour voir ses titres.
+              </p>
+            </div>
+            <div hlmCardContent>
+              <app-playlist-table [playlists]="playlists.value()" />
+            </div>
+          </section>
+
+          <div class="grid gap-6 lg:grid-cols-2">
+            <section hlmCard>
+              <div hlmCardHeader>
+                <h2 hlmCardTitle>Titres en double</h2>
+                <p hlmCardDescription>Présents dans plusieurs playlists, ou deux fois dans la même.</p>
+              </div>
+              <div hlmCardContent>
+                <ul class="space-y-3">
+                  @for (track of duplicates.value(); track track.id) {
+                    <li>
+                      <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
+                      <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
+                      <div class="mt-1 flex flex-wrap gap-1">
+                        @for (name of track.playlists; track $index) {
+                          <span hlmBadge variant="secondary">{{ name }}</span>
+                        }
+                      </div>
+                    </li>
+                  } @empty {
+                    <li class="text-muted-foreground text-sm">Aucun doublon.</li>
+                  }
+                </ul>
+              </div>
+            </section>
+
+            <section hlmCard>
+              <div hlmCardHeader>
+                <h2 hlmCardTitle>Absents de tes playlists</h2>
+                <p hlmCardDescription>Tes titres les plus écoutés qui ne sont dans aucune playlist.</p>
+              </div>
+              <div hlmCardContent>
+                <ol class="space-y-3">
+                  @for (track of missing.value(); track track.id; let i = $index) {
+                    <li class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3">
+                      <span class="text-muted-foreground text-right text-sm tabular-nums">{{ i + 1 }}</span>
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
+                        <p class="text-muted-foreground truncate text-xs">
+                          {{ track.artistName }} · {{ track.lastPlayedAt | since }}
+                        </p>
+                      </div>
+                      <span class="text-sm tabular-nums">{{ track.plays | number }} écoutes</span>
+                    </li>
+                  } @empty {
+                    <li class="text-muted-foreground text-sm">Tous tes titres écoutés sont dans une playlist.</li>
+                  }
+                </ol>
+              </div>
+            </section>
+          </div>
+        </div>
+      }
+    } @else {
+      <div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        @for (i of [1, 2, 3, 4]; track i) {
+          <div hlmSkeleton class="h-20 rounded-xl"></div>
+        }
+      </div>
+      <div hlmSkeleton class="mt-6 h-96 rounded-xl"></div>
+    }
+  `,
+})
+export class PlaylistsPage {
+  private readonly http = inject(HttpClient);
+
+  protected readonly overview = httpResource<PlaylistOverview>(() => '/api/playlists/overview');
+  protected readonly playlists = httpResource<PlaylistStat[]>(() => '/api/playlists');
+  protected readonly duplicates = httpResource<DuplicateTrack[]>(() => '/api/playlists/duplicates', {
+    defaultValue: [],
+  });
+  protected readonly missing = httpResource<TrackStat[]>(
+    () => ({ url: '/api/playlists/missing', params: { limit: 20 } }),
+    { defaultValue: [] },
+  );
+  private readonly history = httpResource<HistorySummary>(() => '/api/history');
+
+  protected readonly syncing = signal(false);
+  protected readonly syncFailed = signal(false);
+
+  protected readonly syncedAt = computed(() =>
+    this.overview.hasValue() ? this.overview.value().syncedAt : null,
+  );
+  protected readonly noHistory = computed(
+    () => this.history.hasValue() && this.history.value().plays === 0,
+  );
+
+  constructor() {
+    // Première visite : les playlists n'ont jamais été récupérées. Une seule tentative automatique.
+    let autoSynced = false;
+    effect(() => {
+      if (!autoSynced && this.overview.hasValue() && this.overview.value().syncedAt === null) {
+        autoSynced = true;
+        void this.sync();
+      }
+    });
+  }
+
+  /** Lance la synchro, puis attend que `syncedAt` change pour tout recharger. */
+  protected async sync(): Promise<void> {
+    if (this.syncing()) {
+      return;
+    }
+    this.syncing.set(true);
+    this.syncFailed.set(false);
+    const before = this.syncedAt();
+
+    try {
+      await firstValueFrom(this.http.post('/api/playlists/sync', null));
+      for (let i = 0; i < POLL_MAX; i++) {
+        await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+        const overview = await firstValueFrom(
+          this.http.get<PlaylistOverview>('/api/playlists/overview'),
+        );
+        if (overview.syncedAt !== before) {
+          break;
+        }
+      }
+    } catch {
+      this.syncFailed.set(true);
+    }
+
+    for (const resource of [this.overview, this.playlists, this.duplicates, this.missing]) {
+      resource.reload();
+    }
+    this.syncing.set(false);
+  }
+}

@@ -73,3 +73,53 @@ export interface HourStat {
   hour: number;
   plays: number;
 }
+
+/**
+ * Playlists recopiées depuis Spotify. `syncedAt` est null avant la première synchro,
+ * et change à la fin de chacune. Les titres sont comptés une fois, même s'ils sont dans plusieurs playlists.
+ */
+export interface PlaylistOverview {
+  syncedAt: string | null;
+  playlists: number;
+  /** Playlists suivies dont Spotify ne donne pas le contenu. */
+  unreadable: number;
+  tracks: number;
+  neverPlayed: number;
+  duplicates: number;
+}
+
+/** `id` : id Spotify. `skipRate` : part des écoutes de ses titres qui ont été passées. */
+export interface PlaylistStat {
+  id: string;
+  name: string;
+  ownerName: string;
+  imageUrl: string | null;
+  tracks: number;
+  artists: number;
+  durationMs: number;
+  neverPlayed: number;
+  skipRate: number;
+  lastPlayedAt: string | null;
+  lastAddedAt: string | null;
+}
+
+export interface PlaylistTrackStat {
+  position: number;
+  id: string;
+  name: string;
+  artistName: string;
+  albumName: string;
+  durationMs: number | null;
+  addedAt: string | null;
+  plays: number;
+  skipRate: number;
+  lastPlayedAt: string | null;
+}
+
+/** `playlists` : noms des playlists, répétés si le titre y est en double. */
+export interface DuplicateTrack {
+  id: string;
+  name: string;
+  artistName: string;
+  playlists: string[];
+}

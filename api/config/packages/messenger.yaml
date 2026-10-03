@@ -9,6 +9,7 @@ framework:
 
         routing:
             'App\Message\ImportPlays': async
+            'App\Message\SyncPlaylists': async
 
 when@test:
     framework:

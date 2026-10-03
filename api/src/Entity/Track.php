@@ -22,6 +22,9 @@ class Track
         private readonly string $artistName,
         #[ORM\Column(type: Types::TEXT)]
         private readonly string $albumName,
+        /** Absente de l'historique d'écoute, connue une fois le titre vu dans une playlist. */
+        #[ORM\Column(nullable: true)]
+        private readonly ?int $durationMs = null,
     ) {
     }
 
@@ -43,5 +46,10 @@ class Track
     public function getAlbumName(): string
     {
         return $this->albumName;
+    }
+
+    public function getDurationMs(): ?int
+    {
+        return $this->durationMs;
     }
 }

@@ -34,6 +34,9 @@ class User implements UserInterface
     #[ORM\Column]
     private readonly \DateTimeImmutable $createdAt;
 
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $playlistsSyncedAt = null;
+
     public function __construct(
         #[ORM\Column(length: 255, unique: true)]
         private readonly string $spotifyId,
@@ -106,6 +109,18 @@ class User implements UserInterface
     public function getCreatedAt(): \DateTimeImmutable
     {
         return $this->createdAt;
+    }
+
+    public function getPlaylistsSyncedAt(): ?\DateTimeImmutable
+    {
+        return $this->playlistsSyncedAt;
+    }
+
+    public function setPlaylistsSyncedAt(\DateTimeImmutable $playlistsSyncedAt): static
+    {
+        $this->playlistsSyncedAt = $playlistsSyncedAt;
+
+        return $this;
     }
 
     public function getUserIdentifier(): string

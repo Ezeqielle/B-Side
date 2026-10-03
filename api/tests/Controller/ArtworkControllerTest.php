@@ -2,7 +2,6 @@
 
 namespace App\Tests\Controller;
 
-use App\Entity\Play;
 use App\Entity\Track;
 use App\Entity\User;
 use App\Stats\Artwork;
@@ -23,7 +22,8 @@ class ArtworkControllerTest extends WebTestCase
         $this->client = static::createClient();
 
         $em = static::getContainer()->get(EntityManagerInterface::class);
-        foreach ([Play::class, Track::class, User::class] as $entity) {
+        // Écoutes et playlists sont supprimées avec l'utilisateur (ON DELETE CASCADE)
+        foreach ([User::class, Track::class] as $entity) {
             $em->createQuery('DELETE FROM ' . $entity)->execute();
         }
 

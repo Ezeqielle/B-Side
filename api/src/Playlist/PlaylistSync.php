@@ -49,9 +49,20 @@ class PlaylistSync
     {
         $known = $this->playlistRepository->findByUserIndexed($user);
 
+        $trashFound = false;
         foreach ($this->spotify->getPlaylists($user) as $remote) {
+            // La corbeille fausserait les stats
+            if ($remote->id === $user->getTrashPlaylistId()) {
+                $trashFound = true;
+                continue;
+            }
             $this->syncPlaylist($user, $known[$remote->id] ?? new Playlist($user, $remote->id), $remote);
             unset($known[$remote->id]);
+        }
+
+        // Corbeille supprimée de la bibliothèque : une autre sera créée au prochain retrait
+        if (!$trashFound) {
+            $user->setTrashPlaylistId(null);
         }
 
         $this->syncLikedTracks($user, $known[Playlist::LIKED] ?? new Playlist($user, Playlist::LIKED));

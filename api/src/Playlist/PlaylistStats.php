@@ -20,7 +20,7 @@ final readonly class PlaylistStats
     /** Playlist (alias pl) qui n'est pas les titres likés. */
     private const string NOT_LIKED = "pl.spotify_id <> '" . Playlist::LIKED . "'";
 
-    /** Titre jamais écouté (alias l pour ses écoutes), comme Cleanup::NeverPlayed. */
+    /** Titre jamais écouté (alias l pour ses écoutes). */
     private const string NEVER_PLAYED = 'COALESCE(l.plays, 0) = 0';
 
     public function __construct(
@@ -89,10 +89,11 @@ final readonly class PlaylistStats
      */
     public function tracks(Playlist $playlist, PlayFilter $filter): array
     {
-        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, added_at: ?string, plays: int, skip_rate: float, last_played_at: ?string}> $rows */
+        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
         $rows = $this->withListened($playlist->getUser(), $filter, '
             SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, pt.added_at,
                 COALESCE(l.plays, 0) AS plays,
+                COALESCE(l.starts, 0) AS starts,
                 COALESCE(l.skips::float / NULLIF(l.starts, 0), 0) AS skip_rate,
                 l.last_played_at
             FROM playlist_track pt
@@ -111,9 +112,9 @@ final readonly class PlaylistStats
             durationMs: $row['duration_ms'],
             addedAt: self::date($row['added_at']),
             plays: $row['plays'],
+            starts: $row['starts'],
             skipRate: (float) $row['skip_rate'],
             lastPlayedAt: self::date($row['last_played_at']),
-            cleanup: Cleanup::of($row['plays'], (float) $row['skip_rate']),
         ), $rows);
     }
 

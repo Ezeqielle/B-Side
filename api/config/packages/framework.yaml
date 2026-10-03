@@ -15,6 +15,9 @@ framework:
             # Autowiring : #[Target('spotify.client')] HttpClientInterface $client
             spotify.client:
                 base_uri: 'https://api.spotify.com/v1/'
+                # 429 (quota) : nouvel essai après le délai demandé par Spotify
+                retry_failed:
+                    max_retries: 3
             # Extraits au survol : on préfère pas d'extrait à un survol qui traîne
             deezer.client:
                 base_uri: 'https://api.deezer.com/'

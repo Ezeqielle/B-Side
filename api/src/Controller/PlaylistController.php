@@ -2,8 +2,10 @@
 
 namespace App\Controller;
 
+use App\Dto\RemoveTracks;
 use App\Entity\User;
 use App\Message\SyncPlaylists;
+use App\Playlist\PlaylistCleanup;
 use App\Playlist\PlaylistStats;
 use App\Repository\PlaylistRepository;
 use App\Stats\PlayFilter;
@@ -14,6 +16,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
 use Symfony\Component\HttpKernel\Attribute\MapQueryString;
+use Symfony\Component\HttpKernel\Attribute\MapRequestPayload;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\CurrentUser;
@@ -97,5 +100,21 @@ class PlaylistController extends AbstractController
 
             return $this->stats->tracks($playlist, $filter);
         }));
+    }
+
+    /**
+     * Retire des titres, par position : ils vont dans la corbeille et dans le journal (voir RemovalController).
+     */
+    #[Route('/{id}/remove', name: '_remove', methods: ['POST'])]
+    public function remove(
+        #[CurrentUser] User $user,
+        string $id,
+        #[MapRequestPayload] RemoveTracks $payload,
+        PlaylistRepository $playlistRepository,
+        PlaylistCleanup $cleanup,
+    ): JsonResponse {
+        $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+
+        return $this->json(['removed' => $cleanup->remove($playlist, $payload->positions)]);
     }
 }

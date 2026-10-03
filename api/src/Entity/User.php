@@ -37,6 +37,10 @@ class User implements UserInterface
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $playlistsSyncedAt = null;
 
+    /** Playlist Spotify où vont les titres retirés, créée au premier retrait. */
+    #[ORM\Column(length: 64, nullable: true)]
+    private ?string $trashPlaylistId = null;
+
     public function __construct(
         #[ORM\Column(length: 255, unique: true)]
         private readonly string $spotifyId,
@@ -119,6 +123,21 @@ class User implements UserInterface
     public function setPlaylistsSyncedAt(\DateTimeImmutable $playlistsSyncedAt): static
     {
         $this->playlistsSyncedAt = $playlistsSyncedAt;
+
+        return $this;
+    }
+
+    public function getTrashPlaylistId(): ?string
+    {
+        return $this->trashPlaylistId;
+    }
+
+    /**
+     * null quand la corbeille a disparu de la bibliothèque : une autre sera créée au prochain retrait.
+     */
+    public function setTrashPlaylistId(?string $trashPlaylistId): static
+    {
+        $this->trashPlaylistId = $trashPlaylistId;
 
         return $this;
     }

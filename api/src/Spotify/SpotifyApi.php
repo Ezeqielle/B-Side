@@ -10,6 +10,7 @@ use App\Spotify\Model\SavedTracksPage;
 use App\Spotify\Model\Track;
 use Symfony\Component\DependencyInjection\Attribute\Target;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use Symfony\Contracts\HttpClient\ResponseInterface;
 
 /**
  * Appels à l'API Web Spotify au nom d'un utilisateur.
@@ -17,6 +18,12 @@ use Symfony\Contracts\HttpClient\HttpClientInterface;
 class SpotifyApi
 {
     private const int PAGE_SIZE = 50;
+
+    /** Titres ajoutés ou retirés d'une playlist par requête, au plus. */
+    private const int PLAYLIST_BATCH = 100;
+
+    /** Titres likés ou retirés des likes par requête, au plus. */
+    private const int LIBRARY_BATCH = 40;
 
     public function __construct(
         #[Target('spotify.client')]
@@ -91,6 +98,73 @@ class SpotifyApi
     }
 
     /**
+     * Crée une playlist privée.
+     *
+     * @return string son id
+     */
+    public function createPlaylist(User $user, string $name, string $description): string
+    {
+        return $this->send($user, 'POST', 'me/playlists', ['json' => [
+            'name' => $name,
+            'description' => $description,
+            'public' => false,
+        ]])->toArray()['id'];
+    }
+
+    /**
+     * Ajoute des titres à une playlist, à la fin ou à partir de `$position`.
+     *
+     * @param list<string> $trackIds
+     */
+    public function addToPlaylist(User $user, string $playlistId, array $trackIds, ?int $position = null): void
+    {
+        foreach (array_chunk($trackIds, self::PLAYLIST_BATCH) as $i => $ids) {
+            $this->send($user, 'POST', self::playlistItems($playlistId), ['json' => array_filter([
+                'uris' => self::uris($ids),
+                'position' => null !== $position ? $position + $i * self::PLAYLIST_BATCH : null,
+            ], static fn (mixed $value): bool => null !== $value)]);
+        }
+    }
+
+    /**
+     * Retire des titres d'une playlist : toutes leurs occurrences, Spotify ne permet pas d'en viser une.
+     *
+     * @param list<string> $trackIds
+     */
+    public function removeFromPlaylist(User $user, string $playlistId, array $trackIds): void
+    {
+        foreach (array_chunk($trackIds, self::PLAYLIST_BATCH) as $ids) {
+            $this->send($user, 'DELETE', self::playlistItems($playlistId), ['json' => [
+                'items' => array_map(static fn (string $uri): array => ['uri' => $uri], self::uris($ids)),
+            ]]);
+        }
+    }
+
+    /**
+     * Like des titres.
+     *
+     * @param list<string> $trackIds
+     */
+    public function saveTracks(User $user, array $trackIds): void
+    {
+        foreach (array_chunk($trackIds, self::LIBRARY_BATCH) as $ids) {
+            $this->send($user, 'PUT', 'me/library', ['query' => ['uris' => implode(',', self::uris($ids))]]);
+        }
+    }
+
+    /**
+     * Retire des titres des likes.
+     *
+     * @param list<string> $trackIds
+     */
+    public function removeSavedTracks(User $user, array $trackIds): void
+    {
+        foreach (array_chunk($trackIds, self::LIBRARY_BATCH) as $ids) {
+            $this->send($user, 'DELETE', 'me/library', ['query' => ['uris' => implode(',', self::uris($ids))]]);
+        }
+    }
+
+    /**
      * Parcourt une liste paginée à partir de `$offset`, 50 éléments par requête (le maximum).
      *
      * @return list<array<string, mixed>>
@@ -113,9 +187,36 @@ class SpotifyApi
      */
     private function get(User $user, string $path, array $query = []): array
     {
-        return $this->spotifyClient->request('GET', $path, [
+        return $this->send($user, 'GET', $path, ['query' => $query])->toArray();
+    }
+
+    /**
+     * @param array<string, mixed> $options
+     */
+    private function send(User $user, string $method, string $path, array $options = []): ResponseInterface
+    {
+        $response = $this->spotifyClient->request($method, $path, [
             'auth_bearer' => $this->tokenRefresher->getValidAccessToken($user),
-            'query' => $query,
-        ])->toArray();
+            ...$options,
+        ]);
+        // Lève une exception si Spotify refuse, même quand la réponse n'est pas lue
+        $response->getHeaders();
+
+        return $response;
+    }
+
+    private static function playlistItems(string $playlistId): string
+    {
+        return 'playlists/' . rawurlencode($playlistId) . '/items';
+    }
+
+    /**
+     * @param list<string> $trackIds
+     *
+     * @return list<string>
+     */
+    private static function uris(array $trackIds): array
+    {
+        return array_map(static fn (string $id): string => 'spotify:track:' . $id, $trackIds);
     }
 }

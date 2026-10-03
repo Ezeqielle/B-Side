@@ -13,9 +13,10 @@ final readonly class PlaylistTrackStat
         public ?int $durationMs,
         public ?\DateTimeImmutable $addedAt,
         public int $plays,
+        /** Toutes ses écoutes, même courtes : la base de `skipRate`. */
+        public int $starts,
         public float $skipRate,
         public ?\DateTimeImmutable $lastPlayedAt,
-        public ?Cleanup $cleanup,
     ) {
     }
 }

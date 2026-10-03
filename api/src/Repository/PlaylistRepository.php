@@ -3,6 +3,7 @@
 namespace App\Repository;
 
 use App\Entity\Playlist;
+use App\Entity\PlaylistTrack;
 use App\Entity\User;
 use App\Spotify\Model\PlaylistItem;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
@@ -35,6 +36,24 @@ class PlaylistRepository extends ServiceEntityRepository
     public function findOneReadable(User $user, string $spotifyId): ?Playlist
     {
         return $this->findOneBy(['user' => $user, 'spotifyId' => $spotifyId, 'readable' => true]);
+    }
+
+    /**
+     * Contenu de la playlist, dans l'ordre.
+     *
+     * @return array<int, PlaylistTrack> par position
+     */
+    public function findTracks(Playlist $playlist): array
+    {
+        return $this->getEntityManager()->createQueryBuilder()
+            ->select('pt', 't')
+            ->from(PlaylistTrack::class, 'pt', 'pt.position')
+            ->innerJoin('pt.track', 't')
+            ->where('pt.playlist = :playlist')
+            ->setParameter('playlist', $playlist)
+            ->orderBy('pt.position')
+            ->getQuery()
+            ->getResult();
     }
 
     /**

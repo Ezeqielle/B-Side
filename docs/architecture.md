@@ -86,8 +86,9 @@ Côté front :
 
 `GET /api/playlists/{id}/versions` regroupe les versions d'un même morceau dans la playlist (`App\Playlist\SongVersions`), testé sur de vraies playlists :
 
-- Même morceau : même titre de base (sans ce qui suit « - » ni ce qui est entre parenthèses), et même artiste ou même durée à 2 s près. La durée rattrape les collaborations et compilations rangées sous un autre artiste d'album ; sans elle, deux artistes différents sont presque toujours des homonymes.
-- Même enregistrement : en plus, même titre aux mentions sans effet près (feat., Original Mix, Radio Edit, Remastered…) et même durée à 2 s près. Un remix, un instrumental ou une autre durée sont une autre version.
+- Même morceau : même titre de base (sans ce qui suit « - » ni ce qui est entre parenthèses, sauf un remix), et même artiste ou même durée à 2 s près. La durée rattrape les collaborations et compilations rangées sous un autre artiste d'album ; sans elle, deux artistes différents sont presque toujours des homonymes.
+- Même enregistrement : en plus, même titre aux mentions sans effet près (feat., Original Mix, Radio Edit, Remastered…) et même durée à 2 s près. Un instrumental, un extended ou une autre durée sont une autre version.
+- Un remix (Remix, Rework, Bootleg, VIP, « X Mix » hors Original, Extended, Radio…) est un autre morceau que l'original et que les autres remix : deux copies du même remix restent des doublons.
 
 Page `/playlists/{id}/doublons` : une version gardée par groupe (la plus anciennement ajoutée par défaut), les autres versions du même enregistrement cochées pour être retirées, les autres versions aussi sur demande. Le retrait passe par la corbeille et le journal.
 

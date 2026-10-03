@@ -11,7 +11,7 @@
 - Extraits au survol : `/api/preview/track/{id}` (Deezer, avec cache), directive `appPreview` sur les pochettes, un seul lecteur audio partagé avec fondu, interrupteur dans l'en-tête
 
 - Nettoyage des playlists et des likes par règles réglables, via une playlist corbeille, avec journal et remise en place
-- Doublons : versions d'un même morceau dans une playlist (single, album, remix…), à garder ou retirer
+- Doublons : versions d'un même morceau dans une playlist (single, album, edit…), à garder ou retirer
 
 ## Étapes suivantes
 

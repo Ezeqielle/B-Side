@@ -103,7 +103,7 @@ class PlaylistController extends AbstractController
     }
 
     /**
-     * Versions d'un même morceau (single, album, remix…), par groupe : de quoi n'en garder qu'une.
+     * Versions d'un même morceau (single, album, edit…), par groupe : de quoi n'en garder qu'une.
      */
     #[Route('/{id}/versions', name: '_versions', methods: ['GET'])]
     public function versions(#[CurrentUser] User $user, string $id, PlaylistRepository $playlistRepository): JsonResponse

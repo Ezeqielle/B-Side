@@ -3,11 +3,12 @@
 namespace App\Playlist;
 
 /**
- * Versions d'un même morceau dans une playlist : single, album, compilation, mais aussi remix ou edit.
+ * Versions d'un même morceau dans une playlist : single, album, compilation, edit ou instrumental.
  *
  * Deux titres sont des versions d'un même morceau quand leur titre de base (sans ce qui suit « - »
- * ni ce qui est entre parenthèses) est le même, avec le même artiste ou, pour les collaborations
- * et compilations rangées sous un autre artiste, la même durée.
+ * ni ce qui est entre parenthèses, sauf un remix) est le même, avec le même artiste ou, pour les
+ * collaborations et compilations rangées sous un autre artiste, la même durée. Un remix est donc
+ * un autre morceau que l'original et que les autres remix.
  *
  * Ce sont le même enregistrement quand, en plus, leur titre ne diffère que par des mentions sans effet
  * (feat., Radio Edit, Remastered…) et leur durée de quelques secondes au plus.
@@ -19,6 +20,9 @@ final class SongVersions
 
     /** Mentions qui ne changent pas l'enregistrement, entre parenthèses ou après « - ». */
     private const string NEUTRAL = '/^(?:(?:feat\.?|ft\.?|featuring|with)\s.*|original mix|radio edit|radio version|album version|single version|mono|stereo|explicit|clean|(?:\d{4}\s)?remaster(?:ed)?(?:\s\d{4})?(?:\sversion)?)$/u';
+
+    /** Mentions d'un remix, un autre morceau que l'original. */
+    private const string REMIX = '/\b(?:remix|rmx|rework|bootleg|re-?edit|vip)\b|(?<!original|extended|radio|club|album|single|main|instrumental)\smix\b/u';
 
     /**
      * @param list<PlaylistTrackStat> $tracks titres de la playlist, dans l'ordre
@@ -61,11 +65,15 @@ final class SongVersions
     }
 
     /**
-     * Titre sans ce qui suit « - » ni ce qui est entre parenthèses ou crochets.
+     * Titre sans ce qui suit « - » ni ce qui est entre parenthèses ou crochets, sauf un remix.
      */
     public static function base(string $name): string
     {
-        $name = preg_replace(['/\s+-\s+.*$/u', '/\s*[(\[][^)\]]*[)\]]/u'], '', self::fold($name)) ?? '';
+        $name = preg_replace_callback(
+            ['/\s*[(\[]([^)\]]*)[)\]]/u', '/\s+-\s+(.*)$/u'],
+            static fn (array $match): string => preg_match(self::REMIX, $match[1]) ? ' (' . trim($match[1]) . ')' : '',
+            self::fold($name),
+        ) ?? '';
 
         return self::spaces($name);
     }
@@ -77,7 +85,7 @@ final class SongVersions
     {
         $name = preg_replace_callback(
             ['/\s*[(\[]([^)\]]*)[)\]]/u', '/\s+-\s+(.*)$/u'],
-            static fn (array $match): string => preg_match(self::NEUTRAL, trim($match[1])) ? '' : $match[0],
+            static fn (array $match): string => preg_match(self::NEUTRAL, trim($match[1])) ? '' : ' (' . trim($match[1]) . ')',
             self::fold($name),
         ) ?? '';
 

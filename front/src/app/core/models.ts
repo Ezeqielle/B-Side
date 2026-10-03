@@ -128,7 +128,7 @@ export interface PlaylistTrackStat {
 }
 
 /**
- * Version d'un morceau dans une playlist : single, album, remix… `recording` est la position du premier
+ * Version d'un morceau dans une playlist : single, album, edit… `recording` est la position du premier
  * titre du même enregistrement, égale pour deux versions identiques.
  */
 export interface SongVersion {

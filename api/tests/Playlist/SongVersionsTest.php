@@ -26,7 +26,12 @@ class SongVersionsTest extends TestCase
         yield 'remaster' => [['Let It Be', 'The Beatles', 243000], ['Let It Be - Remastered 2009', 'The Beatles', 243500], true, true];
         yield 'apostrophe typographique' => [['Let’s Get Married (feat. Offset)', 'Jungle', 233600], ["Let's Get Married", 'Jungle', 233786], true, true];
         yield 'collaboration rangée sous un autre artiste' => [['Feel Good (with Daya)', 'Gryffin', 248000], ['Feel Good', 'ILLENIUM', 248300], true, true];
-        yield 'remix' => [['Something Just Like This', 'The Chainsmokers', 247626], ['Something Just Like This - Don Diablo Remix', 'The Chainsmokers', 230853], true, false];
+        yield 'remix' => [['Something Just Like This', 'The Chainsmokers', 247626], ['Something Just Like This - Don Diablo Remix', 'The Chainsmokers', 230853], false, false];
+        yield 'remix entre parenthèses' => [['Lose Control', 'MEDUZA', 166000], ['Lose Control (Tiësto Remix)', 'MEDUZA', 180000], false, false];
+        yield 'mix d\'un autre artiste' => [['Opus', 'Eric Prydz', 543000], ['Opus - Four Tet Mix', 'Eric Prydz', 412000], false, false];
+        yield 'deux remix différents' => [['Animals - Jay Ronko Remix', 'Martin Garrix', 253090], ['Animals - Oliver Heldens Remix', 'Martin Garrix', 287000], false, false];
+        yield 'même remix, single et album' => [['Animals - Jay Ronko Remix', 'Martin Garrix', 253090], ['Animals (Jay Ronko Remix)', 'Martin Garrix', 253500], true, true];
+        yield 'extended mix' => [['Animals', 'Martin Garrix', 176000], ['Animals - Extended Mix', 'Martin Garrix', 304228], true, false];
         yield 'instrumental de même durée' => [['Carry You', 'Ruelle', 215905], ['Carry You - Instrumental Mix', 'Ruelle', 215905], true, false];
         yield 'même nom, durée différente' => [['Nightcall', 'Kavinsky', 179306], ['Nightcall', 'Kavinsky', 258413], true, false];
         yield 'homonymes' => [['Believe', 'CamelPhat', 213000], ['Believe', 'Don Diablo', 217000], false, false];
@@ -50,7 +55,7 @@ class SongVersionsTest extends TestCase
     public function testGroupsFollowThePlaylist(): void
     {
         $groups = SongVersions::group([
-            self::track(0, 'Animals - Jay Ronko Remix', 'Martin Garrix', 253090),
+            self::track(0, 'Animals - Extended Mix', 'Martin Garrix', 360000),
             self::track(1, 'Wake Me Up', 'Avicii', 247426),
             self::track(2, 'Solo', 'Artist', 200000),
             self::track(3, 'Animals', 'Martin Garrix', 304228),

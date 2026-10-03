@@ -14,7 +14,7 @@ import { SincePipe } from './since';
 import { defaultKept, minutes, removedByDefault } from './version-picks';
 
 /**
- * Versions d'un même morceau dans une playlist (single, album, remix…) : on en garde une par groupe,
+ * Versions d'un même morceau dans une playlist (single, album, edit…) : on en garde une par groupe,
  * et les autres sont cochées pour être retirées. Seul le même enregistrement l'est d'office.
  */
 @Component({
@@ -42,7 +42,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
     <div class="mb-6">
       <h1 class="text-2xl font-bold tracking-tight">Doublons</h1>
       <p class="text-muted-foreground text-sm">
-        Les versions d'un même morceau : single, album, compilation, mais aussi remix ou edit. Choisis
+        Les versions d'un même morceau : single, album, compilation, mais aussi edit ou instrumental (un remix est un autre morceau). Choisis
         celle à garder (d'office, celle d'un album), les autres versions du même enregistrement sont cochées pour être retirées. « Tout garder » laisse le morceau tel quel.
       </p>
     </div>
@@ -62,7 +62,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
         >
           <div class="flex items-center gap-3">
             <hlm-switch inputId="others" [checked]="others()" (checkedChange)="others.set($event)" />
-            <label for="others" class="text-sm">Cocher aussi les autres versions (remix, edit…)</label>
+            <label for="others" class="text-sm">Cocher aussi les autres versions (edit, instrumental…)</label>
           </div>
           <div class="flex items-center gap-3">
             <p class="text-sm" role="status">
@@ -83,7 +83,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
             @let key = group[0].track.position;
             @let keptVersion = keptOf(group);
             @let all = keptAll().has(key);
-            <section class="bg-card divide-y rounded-xl border">
+            <section class="bg-card divide-y overflow-hidden rounded-xl border">
               <div class="flex items-center justify-between gap-3 px-4 py-2">
                 <p class="text-muted-foreground truncate text-xs">
                   {{ group.length }} versions de <span class="text-foreground font-medium">{{ group[0].track.name }}</span>
@@ -104,7 +104,16 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
                   @let track = version.track;
                   @let isKept = all || version === keptVersion;
                   @let isChecked = !all && isRemoved(version, keptVersion);
-                  <div class="flex items-center gap-3 px-4 py-2" [class.opacity-60]="!isKept && !isChecked">
+                  <div
+                    class="flex items-center gap-3 py-2 pr-4 pl-2"
+                    [class.bg-success/10]="isKept"
+                    [class.bg-destructive/10]="isChecked"
+                  >
+                    <span
+                      class="w-1 self-stretch rounded-full"
+                      [class.bg-success]="isKept"
+                      [class.bg-destructive]="isChecked"
+                    ></span>
                     <hlm-radio [value]="track.position" [aria-label]="'Garder ' + track.name + ', ' + track.albumName">
                       <hlm-radio-indicator indicator />
                     </hlm-radio>
@@ -121,17 +130,24 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
                       [imageUrl]="track.imageUrl"
                     />
                     <div class="min-w-0 flex-1">
-                      <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
+                      <p class="truncate text-sm font-medium" [class.line-through]="isChecked" [title]="track.name">
+                        {{ track.name }}
+                      </p>
                       <p class="text-muted-foreground truncate text-xs">
                         {{ track.artistName }} · {{ track.albumName }} · #{{ track.position + 1 }}
                       </p>
                     </div>
+                    @if (!isKept) {
+                      <span hlmBadge variant="outline" class="hidden sm:inline-flex">
+                        {{ version.recording === keptVersion.recording ? 'Même enregistrement' : 'Autre version' }}
+                      </span>
+                    }
                     @if (isKept) {
-                      <span hlmBadge>Gardée</span>
-                    } @else if (version.recording === keptVersion.recording) {
-                      <span hlmBadge variant="secondary">Même enregistrement</span>
+                      <span hlmBadge class="bg-success/15 text-success w-20">Gardée</span>
+                    } @else if (isChecked) {
+                      <span hlmBadge variant="destructive" class="w-20">À retirer</span>
                     } @else {
-                      <span hlmBadge variant="outline">Autre version</span>
+                      <span class="w-20"></span>
                     }
                     <span class="hidden w-12 text-right text-xs tabular-nums sm:inline">
                       {{ minutes(track.durationMs) }}

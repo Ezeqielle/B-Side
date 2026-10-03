@@ -257,6 +257,22 @@ class PlaylistControllerTest extends WebTestCase
         self::assertSame($this->like(61)['track']['id'], $this->get('/api/playlists/liked/tracks')[0]['id']);
     }
 
+    public function testVersions(): void
+    {
+        // Mix : Song A, Song C, Song C
+        $this->mixExtra = [$this->item(self::SONG_C, 'Song C', 'Artist C', null)];
+        $this->sync();
+
+        self::assertSame([], $this->get('/api/playlists/road-trip/versions'));
+
+        [$group] = $this->get('/api/playlists/mix/versions');
+        self::assertSame([1, 2], array_column(array_column($group, 'track'), 'position'));
+        self::assertSame([1, 1], array_column($group, 'recording'));
+
+        $this->client->request('GET', '/api/playlists/discover/versions');
+        self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
+    }
+
     public function testRemovedTracksGoToTheTrashAndTheJournal(): void
     {
         $this->sync();

@@ -103,6 +103,19 @@ class PlaylistController extends AbstractController
     }
 
     /**
+     * Versions d'un même morceau (single, album, remix…), par groupe : de quoi n'en garder qu'une.
+     */
+    #[Route('/{id}/versions', name: '_versions', methods: ['GET'])]
+    public function versions(#[CurrentUser] User $user, string $id, PlaylistRepository $playlistRepository): JsonResponse
+    {
+        return $this->json($this->cache->get($user, __METHOD__, [$id], function () use ($user, $id, $playlistRepository): array {
+            $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+
+            return $this->stats->versions($playlist);
+        }));
+    }
+
+    /**
      * Retire des titres, par position : ils vont dans la corbeille et dans le journal (voir RemovalController).
      */
     #[Route('/{id}/remove', name: '_remove', methods: ['POST'])]

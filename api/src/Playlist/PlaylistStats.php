@@ -119,6 +119,16 @@ final readonly class PlaylistStats
     }
 
     /**
+     * Versions d'un même morceau dans la playlist (SongVersions), avec leurs écoutes.
+     *
+     * @return list<list<SongVersion>>
+     */
+    public function versions(Playlist $playlist): array
+    {
+        return SongVersions::group($this->tracks($playlist, new PlayFilter()));
+    }
+
+    /**
      * Titres en double, les plus répétés d'abord.
      *
      * @return list<DuplicateTrack>

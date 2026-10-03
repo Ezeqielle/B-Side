@@ -45,7 +45,7 @@ class MeControllerTest extends WebTestCase
     {
         $mock = new MockHttpClient(static function (string $method, string $url, array $options): JsonMockResponse {
             self::assertSame('GET', $method);
-            self::assertStringStartsWith('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10', $url);
+            self::assertStringStartsWith('https://api.spotify.com/v1/me/top/tracks?time_range=short_term&limit=10&offset=50', $url);
             self::assertContains('Authorization: Bearer access-token', $options['headers']);
 
             return new JsonMockResponse(['items' => [[
@@ -60,7 +60,7 @@ class MeControllerTest extends WebTestCase
         }, 'https://api.spotify.com/v1/');
         static::getContainer()->set('spotify.client', $mock);
 
-        $this->client->request('GET', '/api/me/top/tracks?range=short_term&limit=10');
+        $this->client->request('GET', '/api/me/top/tracks?range=short_term&limit=10&offset=50');
 
         self::assertResponseIsSuccessful();
         $tracks = json_decode((string) $this->client->getResponse()->getContent(), true);

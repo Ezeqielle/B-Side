@@ -35,11 +35,12 @@ class SpotifyApi
     /**
      * @return list<Track>
      */
-    public function getTopTracks(User $user, TimeRange $range, int $limit = 50): array
+    public function getTopTracks(User $user, TimeRange $range, int $limit = 50, int $offset = 0): array
     {
         $data = $this->get($user, 'me/top/tracks', [
             'time_range' => $range->value,
             'limit' => $limit,
+            'offset' => $offset,
         ]);
 
         return array_values(array_map(Track::fromApi(...), $data['items']));

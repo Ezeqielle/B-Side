@@ -44,9 +44,9 @@ final readonly class PlayStats
     /**
      * @return list<TrackStat>
      */
-    public function topTracks(User $user, PlayFilter $filter, int $limit): array
+    public function topTracks(User $user, PlayFilter $filter, int $limit, int $offset = 0): array
     {
-        return $this->rankTracks($this->listening->plays($user, $filter), $limit);
+        return $this->rankTracks($this->listening->plays($user, $filter), $limit, $offset);
     }
 
     /**
@@ -147,11 +147,11 @@ final readonly class PlayStats
     }
 
     /**
-     * Classe les titres de ces écoutes.
+     * Classe les titres de ces écoutes. L'ordre est total, pour paginer sans doublon ni trou.
      *
      * @return list<TrackStat>
      */
-    private function rankTracks(QueryBuilder $plays, int $limit): array
+    private function rankTracks(QueryBuilder $plays, int $limit, int $offset = 0): array
     {
         /** @var list<array{id: string, name: string, artist_name: string, album_name: string, image_url: ?string, plays: int, ms_played: int, skip_rate: string, last_played_at: string}> $rows */
         $rows = $plays
@@ -170,6 +170,8 @@ final readonly class PlayStats
             ->having(self::PLAYS . ' > 0')
             ->orderBy('plays', 'DESC')
             ->addOrderBy('ms_played', 'DESC')
+            ->addOrderBy('t.id')
+            ->setFirstResult($offset)
             ->setMaxResults($limit)
             ->fetchAllAssociative();
 

@@ -1,5 +1,5 @@
 import { Service, Signal } from '@angular/core';
-import { TIMEZONE, apiResource } from './api-resource';
+import { ApiParams, TIMEZONE, apiResource } from './api-resource';
 import { ArtistStat, HourStat, MonthStat, PlayFilter, StatsOverview, TrackStat } from './models';
 
 /**
@@ -16,12 +16,13 @@ export class StatsApi {
     return stats<MonthStat[]>('timeline', filter);
   }
 
-  tracks(filter: Signal<PlayFilter | undefined>, limit: number) {
-    return stats<TrackStat[]>('tracks', filter, limit);
+  /** `offset` : rang du premier titre, pour charger la suite du classement. */
+  tracks(filter: Signal<PlayFilter | undefined>, limit: number, offset?: Signal<number>) {
+    return stats<TrackStat[]>('tracks', filter, () => ({ limit, offset: offset?.() }));
   }
 
   artists(filter: Signal<PlayFilter>, limit: number) {
-    return stats<ArtistStat[]>('artists', filter, limit);
+    return stats<ArtistStat[]>('artists', filter, () => ({ limit }));
   }
 
   clock(filter: Signal<PlayFilter>) {
@@ -30,11 +31,15 @@ export class StatsApi {
 }
 
 /** Sans filtre (`undefined`), rien n'est chargé. */
-function stats<T>(path: string, filter: Signal<PlayFilter | undefined>, limit?: number) {
+function stats<T>(
+  path: string,
+  filter: Signal<PlayFilter | undefined>,
+  params: () => ApiParams = () => ({}),
+) {
   return apiResource<T>(
     () => {
       const f = filter();
-      return f && { url: `/api/stats/${path}`, params: { ...f, limit, tz: TIMEZONE } };
+      return f && { url: `/api/stats/${path}`, params: { ...f, ...params(), tz: TIMEZONE } };
     },
     { keepPrevious: true },
   );

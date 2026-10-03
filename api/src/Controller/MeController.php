@@ -30,6 +30,6 @@ class MeController extends AbstractController
         SpotifyApi $spotifyApi,
         #[MapQueryString] TopTracksQuery $query = new TopTracksQuery(),
     ): JsonResponse {
-        return $this->json($spotifyApi->getTopTracks($user, $query->range, $query->limit));
+        return $this->json($spotifyApi->getTopTracks($user, $query->range, $query->limit, $query->offset));
     }
 }

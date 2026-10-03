@@ -20,6 +20,7 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
 class StatsController extends AbstractController
 {
     private const array LIMIT = ['min_range' => 1, 'max_range' => 100];
+    private const array OFFSET = ['min_range' => 0];
 
     public function __construct(
         private readonly PlayStats $stats,
@@ -38,8 +39,9 @@ class StatsController extends AbstractController
         #[CurrentUser] User $user,
         #[MapQueryString] PlayFilter $filter = new PlayFilter(),
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
+        #[MapQueryParameter(options: self::OFFSET)] int $offset = 0,
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit], fn () => $this->stats->topTracks($user, $filter, $limit)));
+        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit, $offset], fn () => $this->stats->topTracks($user, $filter, $limit, $offset)));
     }
 
     #[Route('/artists', name: 'artists')]

@@ -59,6 +59,8 @@ class StatsControllerTest extends WebTestCase
         self::assertSame(2, $tracks[0]['plays']);
         self::assertEquals(new \DateTimeImmutable('2021-12-31T23:59:59Z'), new \DateTimeImmutable($tracks[0]['lastPlayedAt']));
 
+        self::assertSame([], $this->get('/api/stats/tracks?offset=1'));
+
         $artists = $this->get('/api/stats/artists?limit=1');
 
         self::assertSame([['name' => 'Artist A', 'plays' => 2, 'msPlayed' => 410000, 'tracks' => 1]], $artists);
@@ -121,6 +123,9 @@ class StatsControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404);
 
         $this->client->request('GET', '/api/stats/tracks?limit=1000');
+        self::assertResponseStatusCodeSame(404);
+
+        $this->client->request('GET', '/api/stats/tracks?offset=-1');
         self::assertResponseStatusCodeSame(404);
     }
 

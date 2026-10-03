@@ -1,5 +1,6 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { apiResource } from '../../core/api-resource';
@@ -15,7 +16,7 @@ const LIMIT = 50;
 
 @Component({
   selector: 'app-top-tracks-page',
-  imports: [RouterLink, HlmTabsImports, HlmSkeletonImports, TrackCard],
+  imports: [RouterLink, HlmButtonImports, HlmTabsImports, HlmSkeletonImports, TrackCard],
   template: `
     <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -37,11 +38,11 @@ const LIMIT = 50;
       </hlm-tabs>
     </div>
 
-    @if (error()) {
+    @if (error() && !tracks().length) {
       <p class="text-destructive" role="alert">Impossible de récupérer tes tops pour le moment.</p>
     } @else {
       <div class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        @if (loading()) {
+        @if (loading() && !tracks().length) {
           @for (i of placeholders; track i) {
             <div>
               <div hlmSkeleton class="aspect-square w-full rounded-lg"></div>
@@ -56,7 +57,9 @@ const LIMIT = 50;
             <p class="text-muted-foreground col-span-full">
               @if (allTime()) {
                 Aucune écoute importée.
-                <a routerLink="/history" class="underline underline-offset-4">Importe ton historique</a>
+                <a routerLink="/history" class="underline underline-offset-4"
+                  >Importe ton historique</a
+                >
                 pour voir ton top depuis toujours.
               } @else {
                 Pas encore assez d'écoutes sur cette période.
@@ -65,6 +68,16 @@ const LIMIT = 50;
           }
         }
       </div>
+      @if (hasMore()) {
+        <div class="mt-8 flex flex-col items-center gap-2">
+          @if (error()) {
+            <p class="text-destructive text-sm" role="alert">Impossible de charger la suite.</p>
+          }
+          <button hlmBtn variant="outline" [disabled]="loading()" (click)="loadMore()">
+            {{ loading() ? 'Chargement…' : 'Charger plus' }}
+          </button>
+        </div>
+      }
     }
   `,
 })
@@ -79,30 +92,66 @@ export class TopTracksPage {
 
   protected readonly range = signal<Range>('short_term');
   protected readonly allTime = computed(() => this.range() === 'all_time');
+  /** Rang du premier titre de la dernière page demandée, remis à 0 à chaque changement de période. */
+  private readonly offset = linkedSignal({ source: this.range, computation: () => 0 });
 
   private readonly spotify = apiResource<Track[]>(() => {
     const range = this.range();
-    return range === 'all_time' ? undefined : { url: '/api/me/top/tracks', params: { range } };
+    return range === 'all_time'
+      ? undefined
+      : { url: '/api/me/top/tracks', params: { range, limit: LIMIT, offset: this.offset() } };
   });
 
   private readonly history = inject(StatsApi).tracks(
     computed(() => (this.allTime() ? {} : undefined)),
     LIMIT,
+    this.offset,
   );
 
   private readonly source = computed(() => (this.allTime() ? this.history : this.spotify));
   protected readonly loading = computed(() => this.source().isLoading());
   protected readonly error = computed(() => this.source().error());
 
-  protected readonly tracks = computed((): CardTrack[] =>
-    this.allTime()
-      ? (this.history.value() ?? []).map((track) => ({
+  /** Dernière page demandée, une fois chargée. */
+  private readonly page = computed((): CardTrack[] | undefined => {
+    if (this.loading()) {
+      return undefined;
+    }
+    return this.allTime()
+      ? this.history.value()?.map((track) => ({
           id: track.id,
           name: track.name,
           artists: [track.artistName],
           album: track.albumName,
           imageUrl: trackArtwork(track),
         }))
-      : (this.spotify.value() ?? []),
-  );
+      : this.spotify.value();
+  });
+
+  /** Pages chargées pour la période, dans l'ordre. */
+  private readonly pages = linkedSignal<
+    { offset: number; page: CardTrack[] | undefined },
+    CardTrack[][]
+  >({
+    source: () => ({ offset: this.offset(), page: this.page() }),
+    computation: ({ offset, page }, previous) => {
+      const pages = offset === 0 ? [] : [...(previous?.value ?? [])];
+      if (page) {
+        pages[offset / LIMIT] = page;
+      }
+      return pages;
+    },
+  });
+
+  protected readonly tracks = computed(() => this.pages().flat());
+  /** Une page incomplète est la dernière. */
+  protected readonly hasMore = computed(() => this.pages().at(-1)?.length === LIMIT);
+
+  protected loadMore(): void {
+    if (this.error()) {
+      this.source().reload();
+    } else {
+      this.offset.update((offset) => offset + LIMIT);
+    }
+  }
 }

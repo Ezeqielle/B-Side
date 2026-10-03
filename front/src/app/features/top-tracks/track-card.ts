@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import { Track } from '../../core/models';
 import { PreviewDirective } from '../../core/preview.directive';
 
@@ -9,14 +9,17 @@ export type CardTrack = Pick<Track, 'id' | 'name' | 'artists' | 'album' | 'image
   selector: 'app-track-card',
   imports: [PreviewDirective],
   template: `
-    <figure class="group rounded-lg" tabindex="0" [appPreview]="track().id">
-      <div
-        class="bg-muted ring-primary relative aspect-square overflow-hidden rounded-lg shadow-md group-data-playing:ring-2"
+    <figure class="group rounded-lg" [appPreview]="track().id">
+      <button
+        type="button"
+        class="bg-muted ring-primary focus-visible:ring-ring relative block aspect-square w-full cursor-pointer overflow-hidden rounded-lg shadow-md group-data-playing:ring-2 focus-visible:ring-2 focus-visible:outline-none"
+        [attr.aria-label]="'Statistiques de ' + track().name"
+        (click)="opened.emit()"
       >
         @if (track().imageUrl; as src) {
           <img
             [src]="src"
-            [alt]="track().album"
+            alt=""
             loading="lazy"
             class="size-full object-cover transition-transform duration-500 ease-out group-hover:scale-110"
           />
@@ -26,7 +29,7 @@ export type CardTrack = Pick<Track, 'id' | 'name' | 'artists' | 'album' | 'image
         >
           #{{ rank() }}
         </span>
-      </div>
+      </button>
       <figcaption class="mt-2 min-w-0">
         <p class="truncate text-sm font-medium" [title]="track().name">{{ track().name }}</p>
         <p class="text-muted-foreground truncate text-xs">{{ track().artists.join(', ') }}</p>
@@ -37,4 +40,6 @@ export type CardTrack = Pick<Track, 'id' | 'name' | 'artists' | 'album' | 'image
 export class TrackCard {
   readonly track = input.required<CardTrack>();
   readonly rank = input.required<number>();
+  /** Clic sur la pochette. Le focus du bouton remonte à la carte : son extrait se joue aussi au clavier. */
+  readonly opened = output();
 }

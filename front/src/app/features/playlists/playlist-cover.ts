@@ -32,7 +32,7 @@ import { LIKED_PLAYLIST_ID, PlaylistStat } from '../../core/models';
   `,
 })
 export class PlaylistCover {
-  readonly playlist = input.required<PlaylistStat>();
+  readonly playlist = input.required<Pick<PlaylistStat, 'id' | 'name' | 'imageUrl'>>();
 
   protected readonly liked = computed(() => this.playlist().id === LIKED_PLAYLIST_ID);
   protected readonly failed = signal(false);

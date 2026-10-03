@@ -1,8 +1,9 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, booleanAttribute, input, signal } from '@angular/core';
+import { Component, booleanAttribute, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TrackPreview } from '../../core/track-preview';
 import type { RankedEntry } from './ranking';
+import { TrackStats } from './track-stats-dialog';
 
 /** Du 1er au 3e : couleur, colonne (le 1er au centre), taille de l'image et hauteur de la marche. */
 const PLACES = [
@@ -36,6 +37,8 @@ const PLACES = [
                 [trackId]="trackId"
                 [name]="entry.name"
                 [imageUrl]="entry.imageUrl"
+                [actionLabel]="'Statistiques de ' + entry.name"
+                (action)="openStats(entry, trackId)"
               />
             } @else if (failed().has(entry.key)) {
               <div
@@ -129,6 +132,17 @@ export class Podium {
 
   /** Entrées sans image : on affiche leur initiale. */
   protected readonly failed = signal(new Set<string>());
+
+  private readonly trackStats = inject(TrackStats);
+
+  protected openStats(entry: RankedEntry, trackId: string): void {
+    this.trackStats.open({
+      id: trackId,
+      name: entry.name,
+      artist: entry.artist,
+      imageUrl: entry.imageUrl,
+    });
+  }
 
   protected fail(key: string): void {
     this.failed.update((keys) => new Set(keys).add(key));

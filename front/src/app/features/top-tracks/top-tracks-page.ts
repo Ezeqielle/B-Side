@@ -7,6 +7,7 @@ import { apiResource } from '../../core/api-resource';
 import { TimeRange, Track } from '../../core/models';
 import { StatsApi } from '../../core/stats-api';
 import { trackArtwork } from '../../core/track-preview';
+import { TrackStats } from '../stats/track-stats-dialog';
 import { CardTrack, TrackCard } from './track-card';
 
 /** Spotify ne remonte pas au-delà d'un an : le top « depuis toujours » vient de l'historique importé. */
@@ -52,7 +53,7 @@ const LIMIT = 50;
           }
         } @else {
           @for (track of tracks(); track track.id; let i = $index) {
-            <app-track-card [track]="track" [rank]="i + 1" />
+            <app-track-card [track]="track" [rank]="i + 1" (opened)="openStats(track)" />
           } @empty {
             <p class="text-muted-foreground col-span-full">
               @if (allTime()) {
@@ -146,6 +147,17 @@ export class TopTracksPage {
   protected readonly tracks = computed(() => this.pages().flat());
   /** Une page incomplète est la dernière. */
   protected readonly hasMore = computed(() => this.pages().at(-1)?.length === LIMIT);
+
+  private readonly trackStats = inject(TrackStats);
+
+  protected openStats(track: CardTrack): void {
+    this.trackStats.open({
+      id: track.id,
+      name: track.name,
+      artist: track.artists.join(', '),
+      imageUrl: track.imageUrl,
+    });
+  }
 
   protected loadMore(): void {
     if (this.error()) {

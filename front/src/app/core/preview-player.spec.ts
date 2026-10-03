@@ -118,6 +118,26 @@ describe('PreviewPlayer', () => {
     expect(player.playing()).toBeNull();
   });
 
+  it("garde l'extrait d'une popup malgré le départ de la souris, jusqu'à sa fermeture", async () => {
+    click();
+    const fixture = TestBed.createComponent(Host);
+    fixture.detectChanges();
+    const el: HTMLElement = fixture.nativeElement.querySelector('div');
+
+    player.hold('A');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.playing()).toBe('A');
+
+    el.dispatchEvent(new PointerEvent('pointerleave', { pointerType: 'mouse' }));
+    expect(player.playing()).toBe('A');
+
+    player.release(true);
+    expect(player.playing()).toBe('A');
+    player.hold('A');
+    player.release();
+    expect(player.playing()).toBeNull();
+  });
+
   it('ignore le toucher', async () => {
     click();
     const fixture = TestBed.createComponent(Host);

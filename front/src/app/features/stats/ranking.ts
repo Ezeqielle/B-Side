@@ -4,6 +4,7 @@ import { RouterLink, UrlTree } from '@angular/router';
 import { TrackPreview } from '../../core/track-preview';
 import { Podium } from './podium';
 import { StatsFilter } from './stats-filter';
+import { TrackStats } from './track-stats-dialog';
 
 /** Un titre (avec `trackId`) ou un artiste d'un classement. */
 export interface RankingEntry {
@@ -51,6 +52,8 @@ export interface RankedEntry extends RankingEntry {
               [trackId]="trackId"
               [name]="entry.name"
               [imageUrl]="entry.imageUrl"
+              [actionLabel]="'Statistiques de ' + entry.name"
+              (action)="openStats(entry, trackId)"
             />
             <div class="min-w-0">
               <p class="truncate text-sm font-medium" [title]="entry.name">{{ entry.name }}</p>
@@ -101,6 +104,7 @@ export class Ranking {
   readonly empty = input.required<string>();
 
   private readonly filter = inject(StatsFilter);
+  private readonly trackStats = inject(TrackStats);
 
   protected readonly ranked = computed(() =>
     this.entries().map((entry): RankedEntry => ({
@@ -110,4 +114,13 @@ export class Ranking {
   );
 
   protected readonly max = computed(() => this.entries()[0]?.plays ?? 1);
+
+  protected openStats(entry: RankingEntry, trackId: string): void {
+    this.trackStats.open({
+      id: trackId,
+      name: entry.name,
+      artist: entry.artist,
+      imageUrl: entry.imageUrl,
+    });
+  }
 }

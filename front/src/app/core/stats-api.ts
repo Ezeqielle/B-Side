@@ -1,6 +1,14 @@
 import { Service, Signal } from '@angular/core';
 import { ApiParams, TIMEZONE, apiResource } from './api-resource';
-import { ArtistStat, HourStat, MonthStat, PlayFilter, StatsOverview, TrackStat } from './models';
+import {
+  ArtistStat,
+  HourStat,
+  MonthStat,
+  PlayFilter,
+  SongStat,
+  StatsOverview,
+  TrackStat,
+} from './models';
 
 /**
  * Stats de l'historique importé, pour le filtre courant. Pendant un changement de filtre,
@@ -27,6 +35,14 @@ export class StatsApi {
 
   clock(filter: Signal<PlayFilter>) {
     return stats<HourStat[]>('clock', filter);
+  }
+
+  /** Historique du morceau d'un titre (id Spotify), sans filtre. */
+  song(trackId: Signal<string>) {
+    return apiResource<SongStat>(() => ({
+      url: `/api/stats/tracks/${trackId()}`,
+      params: { tz: TIMEZONE },
+    }));
   }
 }
 

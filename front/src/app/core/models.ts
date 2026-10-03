@@ -76,6 +76,24 @@ export interface HourStat {
 }
 
 /**
+ * Historique d'un morceau, toutes versions confondues, depuis toujours. Dates ISO 8601.
+ * `topWeekday` : 1 = lundi … 7 = dimanche. `playlists` : hors titres likés.
+ */
+export interface SongStat {
+  name: string;
+  artistName: string;
+  plays: number;
+  msPlayed: number;
+  firstPlayedAt: string | null;
+  lastPlayedAt: string | null;
+  likedAt: string | null;
+  months: MonthStat[];
+  topWeekday: number | null;
+  topHour: number | null;
+  playlists: Pick<PlaylistStat, 'id' | 'name' | 'imageUrl'>[];
+}
+
+/**
  * Playlists recopiées depuis Spotify. `syncedAt` est null avant la première synchro,
  * et change à la fin de chacune. Les titres sont comptés une fois, même s'ils sont dans plusieurs playlists.
  */

@@ -23,7 +23,8 @@
       "@spartan-ng/helm/slider": ["./libs/ui/slider/src/index.ts"],
       "@spartan-ng/helm/alert-dialog": ["./libs/ui/alert-dialog/src/index.ts"],
       "@spartan-ng/helm/radio-group": ["./libs/ui/radio-group/src/index.ts"],
-      "@spartan-ng/helm/switch": ["./libs/ui/switch/src/index.ts"]
+      "@spartan-ng/helm/switch": ["./libs/ui/switch/src/index.ts"],
+      "@spartan-ng/helm/dialog": ["./libs/ui/dialog/src/index.ts"]
     }
   },
   "angularCompilerOptions": {

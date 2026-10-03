@@ -23,6 +23,8 @@ export class PreviewPlayer {
   readonly enabled = signal(readEnabled());
   /** Titres sans extrait, appris au survol : ils ne sont plus redemandés pendant la visite. */
   private readonly unavailable = signal<ReadonlySet<string>>(new Set());
+  /** Titre dont l'extrait ne s'arrête plus au départ de la souris ou du focus, le temps d'une popup. */
+  private held: string | null = null;
 
   constructor() {
     const unlock = () => (this.unlocked = true);
@@ -49,11 +51,25 @@ export class PreviewPlayer {
   }
 
   stop(): void {
-    if (this.playing() === null) {
+    if (this.playing() === null || this.playing() === this.held) {
       return;
     }
     this.playing.set(null);
     this.fadeTo(0).then(() => this.audio.pause());
+  }
+
+  /** Joue l'extrait de ce titre s'il ne joue pas déjà, et le garde jusqu'à `release()`. */
+  hold(trackId: string): void {
+    this.held = trackId;
+    this.play(trackId);
+  }
+
+  /** L'extrait gardé s'arrête, sauf avec `keep`. */
+  release(keep = false): void {
+    this.held = null;
+    if (!keep) {
+      this.stop();
+    }
   }
 
   toggle(): void {
@@ -65,7 +81,7 @@ export class PreviewPlayer {
       // Stockage indisponible (navigation privée) : le choix vaut pour la visite
     }
     if (!enabled) {
-      this.stop();
+      this.release();
     }
   }
 

@@ -5,7 +5,7 @@ import { PreviewPlayer } from './preview-player';
 const HOVER_DELAY_MS = 300;
 
 /**
- * Joue l'extrait du titre (id Spotify) au survol à la souris ou au focus clavier, l'arrête en partant.
+ * Joue l'extrait du titre (id Spotify) au survol à la souris ou au focus clavier (`:focus-visible`), l'arrête en partant.
  * Rien au toucher : il n'y a pas de survol. `data-playing` est posé pendant la lecture, pour un indicateur visuel.
  */
 @Directive({
@@ -13,7 +13,7 @@ const HOVER_DELAY_MS = 300;
   host: {
     '(pointerenter)': 'onPointerEnter($event)',
     '(pointerleave)': 'leave()',
-    '(focusin)': 'enter()',
+    '(focusin)': 'onFocusIn($event)',
     '(focusout)': 'leave()',
     '[attr.data-playing]': 'playing() ? "" : null',
   },
@@ -36,6 +36,13 @@ export class PreviewDirective {
 
   protected onPointerEnter(event: PointerEvent): void {
     if (event.pointerType === 'mouse') {
+      this.enter();
+    }
+  }
+
+  /** Un focus venu d'un clic ou rendu par une popup fermée à la souris ne relance pas l'extrait. */
+  protected onFocusIn(event: FocusEvent): void {
+    if ((event.target as Element).matches(':focus-visible')) {
       this.enter();
     }
   }

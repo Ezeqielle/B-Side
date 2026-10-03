@@ -51,7 +51,7 @@ Tables :
 1. `POST /api/playlists/sync` envoie `SyncPlaylists` au worker. `App\Playlist\PlaylistSync` lit `/me/playlists`, puis le contenu des seules playlists dont le `snapshot_id` a changé (50 titres par requête).
 2. Spotify ne donne le contenu qu'au propriétaire et aux collaborateurs : les playlists suivies sont gardées avec `readable = false`, sans contenu. Un refus (403) n'est redemandé qu'à la modification suivante.
 3. Les titres likés (`GET /me/tracks`) sont rangés comme une playlist à part, `spotify_id = 'liked'` (`Playlist::LIKED`). Sans `snapshot_id`, leur première page (total et 50 derniers likes) sert d'empreinte : une seule requête quand rien n'a changé, sinon relecture complète en la réutilisant. Un 403 ou 404 les passe en `readable = false`.
-4. Chaque titre est enregistré avec sa durée et sa pochette (`track.image_url`).
+4. Chaque titre est enregistré avec sa durée, sa pochette (`track.image_url`) et sa sortie (`track.album_type`, `track.album_tracks`), qui sert à garder la version album parmi les doublons.
 5. Les playlists retirées de la bibliothèque sont supprimées. `user.playlists_synced_at` change à la fin de chaque synchro : le front s'en sert pour savoir qu'elle est terminée.
 
 Tables :

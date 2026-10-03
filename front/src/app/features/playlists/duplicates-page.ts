@@ -43,7 +43,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
       <h1 class="text-2xl font-bold tracking-tight">Doublons</h1>
       <p class="text-muted-foreground text-sm">
         Les versions d'un même morceau : single, album, compilation, mais aussi remix ou edit. Choisis
-        celle à garder, les autres versions du même enregistrement sont cochées pour être retirées.
+        celle à garder (d'office, celle d'un album), les autres versions du même enregistrement sont cochées pour être retirées. « Tout garder » laisse le morceau tel quel.
       </p>
     </div>
 
@@ -78,57 +78,71 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
           </div>
         </div>
 
-        <div class="grid gap-3">
+        <div class="grid grid-cols-1 gap-3">
           @for (group of groups; track group[0].track.position) {
             @let key = group[0].track.position;
             @let keptVersion = keptOf(group);
-            <hlm-radio-group
-              class="bg-card gap-0 divide-y rounded-xl border"
-              [value]="keptVersion.track.position"
-              (valueChange)="keep(key, $event)"
-              [attr.aria-label]="'Version à garder de ' + group[0].track.name"
-            >
-              @for (version of group; track version.track.position) {
-                @let track = version.track;
-                @let isKept = version === keptVersion;
-                <div class="flex items-center gap-3 px-4 py-2" [class.opacity-60]="!isKept && !isRemoved(version, keptVersion)">
-                  <hlm-radio [value]="track.position" [aria-label]="'Garder ' + track.name + ', ' + track.albumName">
-                    <hlm-radio-indicator indicator />
-                  </hlm-radio>
-                  <hlm-checkbox
-                    [aria-label]="'Retirer ' + track.name + ', ' + track.albumName"
-                    [disabled]="isKept"
-                    [checked]="isRemoved(version, keptVersion)"
-                    (checkedChange)="override(track.position, $event)"
-                  />
-                  <app-track-preview
-                    class="size-9 rounded-md"
-                    [trackId]="track.id"
-                    [name]="track.name"
-                    [imageUrl]="track.imageUrl"
-                  />
-                  <div class="min-w-0 flex-1">
-                    <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
-                    <p class="text-muted-foreground truncate text-xs">
-                      {{ track.artistName }} · {{ track.albumName }} · #{{ track.position + 1 }}
-                    </p>
-                  </div>
-                  @if (isKept) {
-                    <span hlmBadge>Gardée</span>
-                  } @else if (version.recording === keptVersion.recording) {
-                    <span hlmBadge variant="secondary">Même enregistrement</span>
-                  } @else {
-                    <span hlmBadge variant="outline">Autre version</span>
-                  }
-                  <span class="hidden w-12 text-right text-xs tabular-nums sm:inline">
-                    {{ minutes(track.durationMs) }}
-                  </span>
-                  <span class="text-muted-foreground hidden w-40 text-right text-xs md:inline">
-                    {{ track.plays | number }} écoutes · ajouté {{ track.addedAt | since }}
-                  </span>
+            @let all = keptAll().has(key);
+            <section class="bg-card divide-y rounded-xl border">
+              <div class="flex items-center justify-between gap-3 px-4 py-2">
+                <p class="text-muted-foreground truncate text-xs">
+                  {{ group.length }} versions de <span class="text-foreground font-medium">{{ group[0].track.name }}</span>
+                </p>
+                <div class="flex shrink-0 items-center gap-2">
+                  <label [for]="'keep-all-' + key" class="text-xs">Tout garder</label>
+                  <hlm-switch [inputId]="'keep-all-' + key" [checked]="all" (checkedChange)="keepAll(key, $event)" />
                 </div>
-              }
-            </hlm-radio-group>
+              </div>
+              <hlm-radio-group
+                class="grid-cols-1 gap-0 divide-y"
+                [value]="keptVersion.track.position"
+                [disabled]="all"
+                (valueChange)="keep(key, $event)"
+                [attr.aria-label]="'Version à garder de ' + group[0].track.name"
+              >
+                @for (version of group; track version.track.position) {
+                  @let track = version.track;
+                  @let isKept = all || version === keptVersion;
+                  @let isChecked = !all && isRemoved(version, keptVersion);
+                  <div class="flex items-center gap-3 px-4 py-2" [class.opacity-60]="!isKept && !isChecked">
+                    <hlm-radio [value]="track.position" [aria-label]="'Garder ' + track.name + ', ' + track.albumName">
+                      <hlm-radio-indicator indicator />
+                    </hlm-radio>
+                    <hlm-checkbox
+                      [aria-label]="'Retirer ' + track.name + ', ' + track.albumName"
+                      [disabled]="isKept"
+                      [checked]="isChecked"
+                      (checkedChange)="override(track.position, $event)"
+                    />
+                    <app-track-preview
+                      class="size-9 rounded-md"
+                      [trackId]="track.id"
+                      [name]="track.name"
+                      [imageUrl]="track.imageUrl"
+                    />
+                    <div class="min-w-0 flex-1">
+                      <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
+                      <p class="text-muted-foreground truncate text-xs">
+                        {{ track.artistName }} · {{ track.albumName }} · #{{ track.position + 1 }}
+                      </p>
+                    </div>
+                    @if (isKept) {
+                      <span hlmBadge>Gardée</span>
+                    } @else if (version.recording === keptVersion.recording) {
+                      <span hlmBadge variant="secondary">Même enregistrement</span>
+                    } @else {
+                      <span hlmBadge variant="outline">Autre version</span>
+                    }
+                    <span class="hidden w-12 text-right text-xs tabular-nums sm:inline">
+                      {{ minutes(track.durationMs) }}
+                    </span>
+                    <span class="text-muted-foreground hidden w-64 shrink-0 truncate text-right text-xs md:inline">
+                      {{ track.plays | number }} écoutes · ajouté {{ track.addedAt | since }}
+                    </span>
+                  </div>
+                }
+              </hlm-radio-group>
+            </section>
           }
         </div>
       } @else {
@@ -158,6 +172,12 @@ export class DuplicatesPage {
     computation: () => new Map(),
   });
 
+  /** Groupes dont on garde toutes les versions (clé : position du premier titre). */
+  protected readonly keptAll = linkedSignal<SongVersion[][], ReadonlySet<number>>({
+    source: this.groups,
+    computation: () => new Set(),
+  });
+
   /** Cases cochées ou décochées à la main, par position. */
   private readonly overrides = linkedSignal<SongVersion[][], ReadonlyMap<number, boolean>>({
     source: this.groups,
@@ -166,6 +186,9 @@ export class DuplicatesPage {
 
   protected readonly selected = computed(() =>
     this.groups().flatMap((group) => {
+      if (this.keptAll().has(group[0].track.position)) {
+        return [];
+      }
       const kept = this.keptOf(group);
       return group
         .filter((version) => this.isRemoved(version, kept))
@@ -191,6 +214,18 @@ export class DuplicatesPage {
     this.overrides.update((overrides) => {
       const next = new Map(overrides);
       next.delete(position);
+      return next;
+    });
+  }
+
+  protected keepAll(key: number, all: boolean): void {
+    this.keptAll.update((keptAll) => {
+      const next = new Set(keptAll);
+      if (all) {
+        next.add(key);
+      } else {
+        next.delete(key);
+      }
       return next;
     });
   }

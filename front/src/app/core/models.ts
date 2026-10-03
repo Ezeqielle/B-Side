@@ -117,6 +117,9 @@ export interface PlaylistTrackStat {
   albumName: string;
   durationMs: number | null;
   imageUrl: string | null;
+  /** `album`, `single` ou `compilation`, inconnu avant la synchro des playlists. */
+  albumType: string | null;
+  albumTracks: number | null;
   addedAt: string | null;
   plays: number;
   starts: number;

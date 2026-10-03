@@ -12,6 +12,9 @@ final readonly class PlaylistTrackStat
         public string $albumName,
         public ?int $durationMs,
         public ?string $imageUrl,
+        /** `album`, `single` ou `compilation`, inconnu avant la synchro des playlists. */
+        public ?string $albumType,
+        public ?int $albumTracks,
         public ?\DateTimeImmutable $addedAt,
         public int $plays,
         /** Toutes ses écoutes, même courtes : la base de `skipRate`. */

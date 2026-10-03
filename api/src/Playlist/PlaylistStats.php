@@ -89,9 +89,10 @@ final readonly class PlaylistStats
      */
     public function tracks(Playlist $playlist, PlayFilter $filter): array
     {
-        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, image_url: ?string, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
+        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, image_url: ?string, album_type: ?string, album_tracks: ?int, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
         $rows = $this->withListened($playlist->getUser(), $filter, '
-            SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, t.image_url, pt.added_at,
+            SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, t.image_url, t.album_type, t.album_tracks,
+                pt.added_at,
                 COALESCE(l.plays, 0) AS plays,
                 COALESCE(l.starts, 0) AS starts,
                 COALESCE(l.skips::float / NULLIF(l.starts, 0), 0) AS skip_rate,
@@ -111,6 +112,8 @@ final readonly class PlaylistStats
             albumName: $row['album_name'],
             durationMs: $row['duration_ms'],
             imageUrl: $row['image_url'],
+            albumType: $row['album_type'],
+            albumTracks: $row['album_tracks'],
             addedAt: self::date($row['added_at']),
             plays: $row['plays'],
             starts: $row['starts'],

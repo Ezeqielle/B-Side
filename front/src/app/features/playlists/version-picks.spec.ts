@@ -1,7 +1,12 @@
 import { PlaylistTrackStat, SongVersion } from '../../core/models';
 import { defaultKept, minutes, removedByDefault } from './version-picks';
 
-function version(position: number, recording: number, addedAt: string | null): SongVersion {
+function version(
+  position: number,
+  recording: number,
+  addedAt: string | null,
+  album: Pick<PlaylistTrackStat, 'albumType' | 'albumTracks'> = { albumType: null, albumTracks: null },
+): SongVersion {
   const track: PlaylistTrackStat = {
     position,
     id: `id${position}`,
@@ -15,6 +20,7 @@ function version(position: number, recording: number, addedAt: string | null): S
     starts: 0,
     skipRate: 0,
     lastPlayedAt: null,
+    ...album,
   };
   return { track, recording };
 }
@@ -24,6 +30,15 @@ describe('defaultKept', () => {
     expect(defaultKept([version(0, 0, '2024-01-01T00:00:00Z'), version(5, 0, '2020-01-01T00:00:00Z')])).toBe(5);
     expect(defaultKept([version(0, 0, '2024-01-01T00:00:00Z'), version(5, 0, null)])).toBe(5);
     expect(defaultKept([version(0, 0, null), version(5, 0, null)])).toBe(0);
+  });
+
+  it('keeps the album version first, even added later', () => {
+    const single = version(0, 0, '2020-01-01T00:00:00Z', { albumType: 'single', albumTracks: 4 });
+    const album = version(5, 0, '2024-01-01T00:00:00Z', { albumType: 'album', albumTracks: 13 });
+    const oneTrackAlbum = version(9, 0, '2018-01-01T00:00:00Z', { albumType: 'album', albumTracks: 1 });
+    expect(defaultKept([single, album])).toBe(5);
+    expect(defaultKept([oneTrackAlbum, single, album])).toBe(5);
+    expect(defaultKept([oneTrackAlbum, single])).toBe(9);
   });
 });
 

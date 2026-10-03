@@ -28,6 +28,12 @@ class Track
         /** Pochette de l'album en 300 px, connue une fois le titre vu dans une playlist ou affiché. */
         #[ORM\Column(type: Types::TEXT, nullable: true)]
         private readonly ?string $imageUrl = null,
+        /** Type de sortie (`album`, `single`, `compilation`), connu une fois le titre vu dans une playlist. */
+        #[ORM\Column(length: 20, nullable: true)]
+        private readonly ?string $albumType = null,
+        /** Nombre de titres de la sortie, connu avec albumType. */
+        #[ORM\Column(nullable: true)]
+        private readonly ?int $albumTracks = null,
     ) {
     }
 
@@ -59,5 +65,15 @@ class Track
     public function getImageUrl(): ?string
     {
         return $this->imageUrl;
+    }
+
+    public function getAlbumType(): ?string
+    {
+        return $this->albumType;
+    }
+
+    public function getAlbumTracks(): ?int
+    {
+        return $this->albumTracks;
     }
 }

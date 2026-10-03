@@ -25,6 +25,9 @@ final readonly class Track
         public ?string $thumbnailUrl,
         public int $durationMs,
         public ?string $isrc,
+        /** `album`, `single` ou `compilation`. */
+        public ?string $albumType = null,
+        public ?int $albumTracks = null,
     ) {
     }
 
@@ -45,6 +48,8 @@ final readonly class Track
             thumbnailUrl: self::thumbnail($data['album']['images'] ?? []),
             durationMs: $data['duration_ms'],
             isrc: $data['external_ids']['isrc'] ?? null,
+            albumType: $data['album']['album_type'] ?? null,
+            albumTracks: $data['album']['total_tracks'] ?? null,
         );
     }
 

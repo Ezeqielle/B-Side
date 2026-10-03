@@ -401,6 +401,31 @@ class PlaylistControllerTest extends WebTestCase
         self::assertContains('POST me/playlists', array_column($this->writes, 0), 'Nouvelle corbeille');
     }
 
+    public function testCreatedPlaylistGetsTheTracksInOrder(): void
+    {
+        $tracks = [self::SONG_C, self::SONG_A, ...array_map(static fn (int $i): string => \sprintf('L%021d', $i), range(1, 100))];
+
+        $this->client->jsonRequest('POST', '/api/playlists', ['name' => 'Top 4 semaines', 'trackIds' => $tracks]);
+
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame(['id' => 'new'], json_decode((string) $this->client->getResponse()->getContent(), true));
+        self::assertSame([
+            ['POST me/playlists', ['name' => 'Top 4 semaines', 'description' => 'Créée par Spotylist.', 'public' => false]],
+            ['POST playlists/new/items', ['uris' => array_map(static fn (string $id): string => 'spotify:track:' . $id, \array_slice($tracks, 0, 100))]],
+            ['POST playlists/new/items', ['uris' => array_map(static fn (string $id): string => 'spotify:track:' . $id, \array_slice($tracks, 100))]],
+        ], $this->writes, 'Par lots de 100');
+        self::assertEquals([new SyncPlaylists($this->userId())], $this->queued(), 'Synchro pour l\'afficher');
+    }
+
+    public function testCreateValidation(): void
+    {
+        $this->client->jsonRequest('POST', '/api/playlists', ['name' => ' ', 'trackIds' => [self::SONG_A]]);
+        self::assertResponseStatusCodeSame(422);
+        $this->client->jsonRequest('POST', '/api/playlists', ['name' => 'Top', 'trackIds' => []]);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame([], $this->writes);
+    }
+
     public function testRemoveValidation(): void
     {
         $this->sync();
@@ -470,7 +495,7 @@ class PlaylistControllerTest extends WebTestCase
     }
 
     /**
-     * Note l'écriture et y répond comme Spotify. La corbeille créée apparaît dans la bibliothèque.
+     * Note l'écriture et y répond comme Spotify. La corbeille créée apparaît dans la bibliothèque, les autres playlists créées sont `new`.
      *
      * @param array<string, mixed> $options
      */
@@ -480,6 +505,9 @@ class PlaylistControllerTest extends WebTestCase
         $this->writes[] = [$request, isset($options['body']) && '' !== $options['body'] ? json_decode($options['body'], true) : null];
 
         if ('POST me/playlists' === $request) {
+            if ('Spotylist · Corbeille' !== json_decode($options['body'], true)['name']) {
+                return new JsonMockResponse(['id' => 'new'], ['http_code' => 201]);
+            }
             $this->snapshots['trash'] = 'v1';
 
             return new JsonMockResponse(['id' => 'trash'], ['http_code' => 201]);

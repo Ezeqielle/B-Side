@@ -1,4 +1,5 @@
-import { Component, computed, inject, linkedSignal, signal } from '@angular/core';
+import { formatDate } from '@angular/common';
+import { Component, LOCALE_ID, computed, inject, linkedSignal, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
@@ -8,6 +9,7 @@ import { TimeRange, Track } from '../../core/models';
 import { StatsApi } from '../../core/stats-api';
 import { trackArtwork } from '../../core/track-preview';
 import { TrackStats } from '../stats/track-stats-dialog';
+import { CreatePlaylist, CreatedPlaylist } from './create-playlist';
 import { CardTrack, TrackCard } from './track-card';
 
 /** Spotify ne remonte pas au-delà d'un an : le top « depuis toujours » vient de l'historique importé. */
@@ -17,7 +19,14 @@ const LIMIT = 50;
 
 @Component({
   selector: 'app-top-tracks-page',
-  imports: [RouterLink, HlmButtonImports, HlmTabsImports, HlmSkeletonImports, TrackCard],
+  imports: [
+    RouterLink,
+    HlmButtonImports,
+    HlmTabsImports,
+    HlmSkeletonImports,
+    CreatePlaylist,
+    TrackCard,
+  ],
   template: `
     <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
       <div>
@@ -30,14 +39,40 @@ const LIMIT = 50;
           }
         </p>
       </div>
-      <hlm-tabs [tab]="range()" (tabActivated)="range.set($any($event))">
-        <hlm-tabs-list aria-label="Période">
-          @for (option of ranges; track option.value) {
-            <button [hlmTabsTrigger]="option.value">{{ option.label }}</button>
-          }
-        </hlm-tabs-list>
-      </hlm-tabs>
+      <div class="flex flex-wrap items-center gap-3">
+        <hlm-tabs [tab]="range()" (tabActivated)="range.set($any($event))">
+          <hlm-tabs-list aria-label="Période">
+            @for (option of ranges; track option.value) {
+              <button [hlmTabsTrigger]="option.value">{{ option.label }}</button>
+            }
+          </hlm-tabs-list>
+        </hlm-tabs>
+        @if (tracks().length) {
+          <app-create-playlist
+            [trackIds]="trackIds()"
+            [defaultName]="playlistName()"
+            (done)="created.set($event)"
+          />
+        }
+      </div>
     </div>
+
+    @if (created(); as playlist) {
+      <p class="mb-6 text-sm" role="status">
+        Playlist « {{ playlist.name }} » créée.
+        <a
+          class="underline underline-offset-4"
+          target="_blank"
+          rel="noopener"
+          [href]="'https://open.spotify.com/playlist/' + playlist.id"
+          >Ouvrir dans Spotify</a
+        >
+      </p>
+    } @else if (created() === null) {
+      <p class="text-destructive mb-6 text-sm" role="alert">
+        La création de la playlist s'est interrompue.
+      </p>
+    }
 
     @if (error() && !tracks().length) {
       <p class="text-destructive" role="alert">Impossible de récupérer tes tops pour le moment.</p>
@@ -145,6 +180,19 @@ export class TopTracksPage {
   });
 
   protected readonly tracks = computed(() => this.pages().flat());
+  protected readonly trackIds = computed(() => this.tracks().map((track) => track.id));
+
+  private readonly locale = inject(LOCALE_ID);
+  /** Nom proposé : « Top 4 semaines · 3 oct. 2026 ». */
+  protected readonly playlistName = computed(() => {
+    const label = this.ranges.find((option) => option.value === this.range())?.label ?? '';
+    return `Top ${label.toLowerCase()} · ${formatDate(Date.now(), 'd MMM y', this.locale)}`;
+  });
+  /** Dernière playlist créée, `null` si la création a échoué. Oubliée au changement de période. */
+  protected readonly created = linkedSignal<Range, CreatedPlaylist | null | undefined>({
+    source: this.range,
+    computation: () => undefined,
+  });
   /** Une page incomplète est la dernière. */
   protected readonly hasMore = computed(() => this.pages().at(-1)?.length === LIMIT);
 

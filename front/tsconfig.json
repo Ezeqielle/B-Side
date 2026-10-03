@@ -24,7 +24,9 @@
       "@spartan-ng/helm/alert-dialog": ["./libs/ui/alert-dialog/src/index.ts"],
       "@spartan-ng/helm/radio-group": ["./libs/ui/radio-group/src/index.ts"],
       "@spartan-ng/helm/switch": ["./libs/ui/switch/src/index.ts"],
-      "@spartan-ng/helm/dialog": ["./libs/ui/dialog/src/index.ts"]
+      "@spartan-ng/helm/dialog": ["./libs/ui/dialog/src/index.ts"],
+      "@spartan-ng/helm/input": ["./libs/ui/input/src/index.ts"],
+      "@spartan-ng/helm/label": ["./libs/ui/label/src/index.ts"]
     }
   },
   "angularCompilerOptions": {

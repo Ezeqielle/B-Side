@@ -79,6 +79,16 @@ export class PlaylistsApi {
   }
 
   /**
+   * Crée une playlist privée sur Spotify avec ces titres, dans l'ordre. Une synchro suit côté serveur :
+   * le cache est vidé.
+   */
+  create(name: string, trackIds: string[]): Observable<{ id: string }> {
+    return this.http
+      .post<{ id: string }>('/api/playlists', { name, trackIds })
+      .pipe(finalize(() => this.cache.clear()));
+  }
+
+  /**
    * Lance la synchro, puis vérifie toutes les 2 s, pendant 3 min au plus, si `syncedAt` a changé.
    * Se termine dans tous les cas : il suffit alors de tout recharger. Se désabonner arrête l'attente.
    */

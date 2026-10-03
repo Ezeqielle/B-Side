@@ -82,3 +82,25 @@ describe('PlaylistsApi.keep', () => {
     http.verify();
   });
 });
+
+describe('PlaylistsApi.create', () => {
+  it('crée la playlist avec les titres, puis vide le cache', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const api = TestBed.inject(PlaylistsApi);
+    const http = TestBed.inject(HttpTestingController);
+    const cache = TestBed.inject(ApiCache);
+    cache.set('/api/playlists?tz=Europe/Paris', []);
+
+    let created: { id: string } | undefined;
+    api.create('Top 4 semaines', ['a', 'b']).subscribe((value) => (created = value));
+    const req = http.expectOne({ method: 'POST', url: '/api/playlists' });
+    expect(req.request.body).toEqual({ name: 'Top 4 semaines', trackIds: ['a', 'b'] });
+    req.flush({ id: 'new' }, { status: 201, statusText: 'Created' });
+
+    expect(created).toEqual({ id: 'new' });
+    expect(cache.has('/api/playlists?tz=Europe/Paris')).toBe(false);
+    http.verify();
+  });
+});

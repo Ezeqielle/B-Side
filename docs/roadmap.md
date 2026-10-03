@@ -12,6 +12,7 @@
 
 - Nettoyage des playlists et des likes par règles réglables, via une playlist corbeille, avec journal, remise en place et liste de titres à garder
 - Doublons : versions d'un même morceau dans une playlist (single, album, edit…), à garder ou retirer
+- Création d'une playlist depuis la page Top : titres affichés (période choisie, pages chargées), nom modifiable
 
 ## Étapes suivantes
 

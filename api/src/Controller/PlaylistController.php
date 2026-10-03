@@ -2,12 +2,14 @@
 
 namespace App\Controller;
 
+use App\Dto\CreatePlaylist;
 use App\Dto\KeepTracks;
 use App\Dto\RemoveTracks;
 use App\Entity\User;
 use App\Message\SyncPlaylists;
 use App\Playlist\KeptTracks;
 use App\Playlist\PlaylistCleanup;
+use App\Playlist\PlaylistCreation;
 use App\Playlist\PlaylistStats;
 use App\Repository\PlaylistRepository;
 use App\Stats\PlayFilter;
@@ -42,6 +44,15 @@ class PlaylistController extends AbstractController
     public function list(#[CurrentUser] User $user, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
         return $this->json($this->cache->get($user, __METHOD__, [$filter], fn () => $this->stats->playlists($user, $filter)));
+    }
+
+    /**
+     * Crée une playlist privée sur Spotify avec ces titres, dans l'ordre.
+     */
+    #[Route('', name: '_create', methods: ['POST'])]
+    public function create(#[CurrentUser] User $user, #[MapRequestPayload] CreatePlaylist $payload, PlaylistCreation $creation): JsonResponse
+    {
+        return $this->json(['id' => $creation->create($user, $payload->name, $payload->trackIds)], Response::HTTP_CREATED);
     }
 
     /**

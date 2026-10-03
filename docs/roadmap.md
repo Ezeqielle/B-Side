@@ -8,13 +8,13 @@
 - Import de l'historique étendu : upload des JSON, traitement par Messenger, tables `track` et `play`
 - Stats sur l'historique : chiffres clés, écoutes par mois, tops titres et artistes, heures d'écoute, filtrables par année et artiste
 - Synchro des playlists et stats croisées avec l'historique : jamais écoutés, souvent passés, dernière écoute, doublons, titres absents des playlists
+- Extraits au survol : `/api/preview/track/{id}` (Deezer, avec cache), directive `appPreview` sur les pochettes, un seul lecteur audio partagé avec fondu, interrupteur dans l'en-tête
 
 ## Étapes suivantes
 
-1. **Extraits au survol** : endpoint `/api/preview/{isrc}` (Deezer, avec cache), directive Angular sur les pochettes et un seul lecteur audio partagé avec fondu
-2. **Nettoyage des likes et des playlists** (jamais écoutés, souvent passés) : les stats de playlists sont prêtes, reste la suppression via `/me/library` et `DELETE /playlists/{id}/items`
-3. **Création de playlists** à partir d'un `PlayFilter` (`PlayStats::topTracks()`), mix
-4. **Exploration de titres proches** via Last.fm
+1. **Nettoyage des likes et des playlists** (jamais écoutés, souvent passés) : les stats de playlists sont prêtes, reste la suppression via `/me/library` et `DELETE /playlists/{id}/items`
+2. **Création de playlists** à partir d'un `PlayFilter` (`PlayStats::topTracks()`), mix
+3. **Exploration de titres proches** via Last.fm
 
 ## Idées
 

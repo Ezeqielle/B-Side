@@ -6,6 +6,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { PlaylistStat, PlaylistTrackStat } from '../../core/models';
+import { TrackPreview } from '../../core/track-preview';
 import { PlaylistCover } from './playlist-cover';
 import { SincePipe } from './since';
 import { Sort, SortHeader, sortRows } from './sort-header';
@@ -46,6 +47,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
     PlaylistCover,
     SincePipe,
     SortHeader,
+    TrackPreview,
   ],
   template: `
     <a routerLink="/playlists" class="text-muted-foreground hover:text-foreground mb-4 inline-block text-sm">
@@ -109,8 +111,13 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                   <tr class="border-b last:border-0">
                     <td class="text-muted-foreground py-2 text-right tabular-nums">{{ track.position + 1 }}</td>
                     <td class="max-w-0 py-2 pr-4 pl-3">
-                      <p class="truncate font-medium" [title]="track.name">{{ track.name }}</p>
-                      <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
+                      <div class="flex items-center gap-3">
+                        <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
+                        <div class="min-w-0">
+                          <p class="truncate font-medium" [title]="track.name">{{ track.name }}</p>
+                          <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
+                        </div>
+                      </div>
                     </td>
                     <td class="py-2 text-right tabular-nums" [class.text-muted-foreground]="!track.plays">
                       {{ track.plays | number }}

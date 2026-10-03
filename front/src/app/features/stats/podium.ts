@@ -1,6 +1,10 @@
 import { DecimalPipe } from '@angular/common';
-import { Component, booleanAttribute, input, signal } from '@angular/core';
+import { Component, booleanAttribute, inject, input, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { NgIcon, provideIcons } from '@ng-icons/core';
+import { lucideAudioLines, lucidePlay, lucideVolumeOff } from '@ng-icons/lucide';
+import { PreviewPlayer } from '../../core/preview-player';
+import { PreviewDirective } from '../../core/preview.directive';
 
 export interface PodiumEntry {
   key: string;
@@ -8,6 +12,8 @@ export interface PodiumEntry {
   /** Artiste affiché sous le nom, cliquable pour filtrer dessus. */
   artist?: string;
   imageUrl: string;
+  /** Id Spotify du titre, pour son extrait au survol. */
+  previewId?: string;
   plays: number;
 }
 
@@ -23,7 +29,8 @@ const PLACES = [
  */
 @Component({
   selector: 'app-podium',
-  imports: [DecimalPipe, RouterLink],
+  imports: [DecimalPipe, RouterLink, NgIcon, PreviewDirective],
+  viewProviders: [provideIcons({ lucideAudioLines, lucidePlay, lucideVolumeOff })],
   template: `
     <ol class="grid grid-cols-3 items-end gap-2 sm:gap-4">
       @for (entry of entries().slice(0, 3); track entry.key; let i = $index) {
@@ -33,9 +40,13 @@ const PLACES = [
           [style.--medal]="places[i].medal"
         >
           <div
-            class="medal-frame shrink-0 p-1"
+            class="medal-frame relative shrink-0 p-1"
             [class]="places[i].image + (round() ? ' rounded-full' : ' rounded-xl')"
             [class.medal-glow]="i === 0"
+            [appPreview]="entry.previewId"
+            [attr.tabindex]="entry.previewId ? 0 : null"
+            [attr.role]="entry.previewId ? 'img' : null"
+            [attr.aria-label]="entry.previewId ? 'Extrait de ' + entry.name : null"
           >
             @if (failed().has(entry.key)) {
               <div
@@ -43,7 +54,21 @@ const PLACES = [
                 [class]="round() ? 'rounded-full' : 'rounded-lg'"
                 aria-hidden="true"
               >
-                {{ entry.name.charAt(0).toUpperCase() }}
+                @if (entry.previewId; as id) {
+                  @switch (player.state(id)) {
+                    @case ('playing') {
+                      <ng-icon name="lucideAudioLines" class="animate-pulse" />
+                    }
+                    @case ('unavailable') {
+                      <ng-icon name="lucideVolumeOff" class="opacity-50" />
+                    }
+                    @default {
+                      <ng-icon name="lucidePlay" />
+                    }
+                  }
+                } @else {
+                  {{ entry.name.charAt(0).toUpperCase() }}
+                }
               </div>
             } @else {
               <img
@@ -54,6 +79,14 @@ const PLACES = [
                 decoding="async"
                 (error)="fail(entry.key)"
               />
+              @if (isPlaying(entry)) {
+                <div
+                  class="absolute inset-1 grid place-items-center rounded-lg bg-black/40 text-2xl text-white"
+                  aria-hidden="true"
+                >
+                  <ng-icon name="lucideAudioLines" class="animate-pulse" />
+                </div>
+              }
             }
           </div>
 
@@ -126,8 +159,14 @@ export class Podium {
 
   protected readonly places = PLACES;
 
+  protected readonly player = inject(PreviewPlayer);
+
   /** Entrées sans image : on affiche leur initiale. */
   protected readonly failed = signal(new Set<string>());
+
+  protected isPlaying(entry: PodiumEntry): boolean {
+    return !!entry.previewId && this.player.playing() === entry.previewId;
+  }
 
   protected fail(key: string): void {
     this.failed.update((keys) => new Set(keys).add(key));

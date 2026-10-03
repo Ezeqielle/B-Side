@@ -1,11 +1,15 @@
 import { Component, input } from '@angular/core';
 import { Track } from '../../core/models';
+import { PreviewDirective } from '../../core/preview.directive';
 
 @Component({
   selector: 'app-track-card',
+  imports: [PreviewDirective],
   template: `
-    <figure class="group">
-      <div class="bg-muted relative aspect-square overflow-hidden rounded-lg shadow-md">
+    <figure class="group rounded-lg" tabindex="0" [appPreview]="track().id">
+      <div
+        class="bg-muted ring-primary relative aspect-square overflow-hidden rounded-lg shadow-md group-data-playing:ring-2"
+      >
         @if (track().imageUrl; as src) {
           <img
             [src]="src"

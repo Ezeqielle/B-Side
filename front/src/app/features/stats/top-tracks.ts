@@ -2,19 +2,21 @@ import { DecimalPipe } from '@angular/common';
 import { Component, computed, input } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TrackStat } from '../../core/models';
+import { TrackPreview } from '../../core/track-preview';
 import { Podium, PodiumEntry } from './podium';
 
 @Component({
   selector: 'app-top-tracks',
-  imports: [DecimalPipe, RouterLink, Podium],
+  imports: [DecimalPipe, RouterLink, Podium, TrackPreview],
   template: `
     @if (podium().length) {
       <app-podium class="mb-6 block" [entries]="podium()" />
     }
     <ol class="space-y-3" start="4">
       @for (track of tracks().slice(3); track track.id; let i = $index) {
-        <li class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
+        <li class="grid grid-cols-[1.5rem_auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5">
           <span class="text-muted-foreground text-right text-sm tabular-nums">{{ i + 4 }}</span>
+          <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
           <div class="min-w-0">
             <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
             <a
@@ -27,7 +29,7 @@ import { Podium, PodiumEntry } from './podium';
             >
           </div>
           <span class="text-sm tabular-nums">{{ track.plays | number }}</span>
-          <div class="bg-muted col-span-2 col-start-2 h-1 rounded-full" aria-hidden="true">
+          <div class="bg-muted col-span-2 col-start-3 h-1 rounded-full" aria-hidden="true">
             <div
               class="bg-viz h-full rounded-full"
               [style.width.%]="(track.plays / max()) * 100"
@@ -57,6 +59,7 @@ export class TopTracks {
           name: track.name,
           artist: track.artistName,
           imageUrl: `/api/artwork/track/${track.id}`,
+          previewId: track.id,
           plays: track.plays,
         }),
       ),

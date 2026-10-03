@@ -38,9 +38,17 @@
 | Titres likés jamais écoutés ou souvent passés | **Historique d'écoute étendu** (export RGPD sur spotify.com/account/privacy, livré sous 30 jours) importé dans l'app. Chaque écoute y figure avec sa durée, `skipped` et `reason_end`. Complété par une relève horaire des 50 derniers titres écoutés. |
 | Mix des tops annuels (Wrapped) | Recalcul du top de chaque année à partir de l'historique étendu. Sinon, l'utilisateur copie sa playlist Wrapped dans une playlist à lui. |
 | Titres proches | **Last.fm** (`track.getSimilar`, `artist.getSimilar`) ou **Deezer** (artistes liés, radio d'artiste), puis on retrouve le titre sur Spotify par `isrc:XXXX` |
-| Extrait au survol | **API Deezer** : `GET https://api.deezer.com/track/isrc:{isrc}` renvoie un MP3 de 30 s (`preview`). Passe par le backend, car Deezer ne gère pas CORS. L'API iTunes Search sert de secours. |
+| Extrait au survol | **API Deezer** : `GET https://api.deezer.com/track/isrc:{isrc}` renvoie un MP3 de 30 s (`preview`). Sinon, recherche simple « artiste titre » (`GET /search?q=…`) avec titre et artiste identiques. Passe par le backend, car Deezer ne gère pas CORS. |
 
 Le navigateur bloque l'audio tant que l'utilisateur n'a pas interagi avec la page : il faut un premier clic avant que les extraits au survol puissent jouer.
+
+À savoir sur Deezer :
+
+- L'URL d'extrait **expire au bout d'environ 15 min** (`hdnea=exp=…`) : on garde en cache la correspondance ISRC → id Deezer, pas l'URL.
+- Deezer répond `200` même en erreur, avec `{"error": {"code": …}}` ; le code `800` veut dire « introuvable ».
+- Un même titre a souvent un ISRC par sortie (single, album) : celui de Spotify peut manquer chez Deezer, d'où la recherche simple en secours.
+- La recherche avancée (`artist:"…" track:"…"`) ne renvoie plus rien, la recherche simple marche.
+- Pas de secours iTunes : son API Search ne cherche pas par ISRC.
 
 ## Scopes demandés
 

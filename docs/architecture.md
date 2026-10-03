@@ -43,6 +43,7 @@ Tables :
 - Une écoute ne compte qu'au-delà de 30 secondes, comme chez Spotify. Temps d'écoute et taux d'écoutes passées prennent tout en compte.
 - Côté front, le filtre est dans l'URL (`/stats?year=2021&artist=…`) : chaque vue le modifie par un simple lien.
 - Images du podium : `GET /api/artwork/track/{id}` et `/api/artwork/artist?name=…` redirigent vers l'image Spotify (404 sans image). Une requête Spotify par image, gardée 30 jours en cache (`App\Stats\Artwork`).
+- Extraits au survol : `GET /api/preview/track/{id}` redirige vers le MP3 Deezer (404 sans extrait). Titre retrouvé chez Deezer par son ISRC (pris chez Spotify), sinon par son nom et son artiste, correspondance gardée 30 jours (absence comprise), URL 10 min (`App\Stats\Preview`, `App\Deezer\DeezerApi`). Côté front, `PreviewPlayer` et la directive `appPreview`.
 
 ## Playlists
 

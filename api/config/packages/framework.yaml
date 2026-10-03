@@ -13,6 +13,10 @@ framework:
             # Autowiring : #[Target('spotify.client')] HttpClientInterface $client
             spotify.client:
                 base_uri: 'https://api.spotify.com/v1/'
+            # Extraits au survol : on préfère pas d'extrait à un survol qui traîne
+            deezer.client:
+                base_uri: 'https://api.deezer.com/'
+                max_duration: 3
 
 when@test:
     framework:

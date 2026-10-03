@@ -14,6 +14,7 @@ import {
   PlaylistStat,
   TrackStat,
 } from '../../core/models';
+import { TrackPreview } from '../../core/track-preview';
 import { PlaylistTable } from './playlist-table';
 import { SincePipe } from './since';
 
@@ -37,6 +38,7 @@ const POLL_MAX = 90;
     HlmSkeletonImports,
     PlaylistTable,
     SincePipe,
+    TrackPreview,
   ],
   template: `
     <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
@@ -136,10 +138,13 @@ const POLL_MAX = 90;
               <div hlmCardContent>
                 <ul class="space-y-3">
                   @for (track of duplicates.value(); track track.id) {
-                    <li>
-                      <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
-                      <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
-                      <div class="mt-1 flex flex-wrap gap-1">
+                    <li class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
+                      <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
+                      <div class="min-w-0">
+                        <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
+                        <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
+                      </div>
+                      <div class="col-start-2 mt-1 flex flex-wrap gap-1">
                         @for (name of track.playlists; track $index) {
                           <span hlmBadge variant="secondary">{{ name }}</span>
                         }
@@ -160,8 +165,9 @@ const POLL_MAX = 90;
               <div hlmCardContent>
                 <ol class="space-y-3">
                   @for (track of missing.value(); track track.id; let i = $index) {
-                    <li class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] items-center gap-x-3">
+                    <li class="grid grid-cols-[1.5rem_auto_minmax(0,1fr)_auto] items-center gap-x-3">
                       <span class="text-muted-foreground text-right text-sm tabular-nums">{{ i + 1 }}</span>
+                      <app-track-preview class="size-9" [trackId]="track.id" [name]="track.name" />
                       <div class="min-w-0">
                         <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                         <p class="text-muted-foreground truncate text-xs">

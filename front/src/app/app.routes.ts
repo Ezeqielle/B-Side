@@ -33,6 +33,10 @@ export const routes: Routes = [
           import('./features/playlists/playlist-page').then((m) => m.PlaylistPage),
       },
       {
+        path: 'journal',
+        loadComponent: () => import('./features/journal/journal-page').then((m) => m.JournalPage),
+      },
+      {
         path: 'history',
         loadComponent: () =>
           import('./features/history/history-page').then((m) => m.HistoryPage),

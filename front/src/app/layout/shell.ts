@@ -19,6 +19,7 @@ import { PreviewPlayer } from '../core/preview-player';
           <a routerLink="/top" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Tops</a>
           <a routerLink="/stats" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Stats</a>
           <a routerLink="/playlists" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Playlists</a>
+          <a routerLink="/journal" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Journal</a>
           <a routerLink="/history" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Historique</a>
         </nav>
         <div class="ml-auto flex items-center gap-3">

@@ -129,3 +129,21 @@ export interface DuplicateTrack {
   artistName: string;
   playlists: string[];
 }
+
+/**
+ * Titre retiré d'une playlist (`playlistId`, ou `LIKED_PLAYLIST_ID`) et mis dans la corbeille.
+ * Les titres d'un même retrait partagent leur `removedAt`. `restoredAt` : remis en place.
+ */
+export interface RemovedTrack {
+  id: number;
+  trackId: string;
+  name: string;
+  artistName: string;
+  albumName: string;
+  playlistId: string;
+  playlistName: string;
+  position: number;
+  addedAt: string | null;
+  removedAt: string;
+  restoredAt: string | null;
+}

@@ -25,7 +25,8 @@ class SpotifyCatalog
 
     public function track(User $user, string $id): Track
     {
-        return $this->cache->get('spotify.track.' . $id, function (ItemInterface $item) use ($user, $id): Track {
+        // v2 : avec thumbnailUrl, absente des titres gardés avant
+        return $this->cache->get('spotify.track.v2.' . $id, function (ItemInterface $item) use ($user, $id): Track {
             $item->expiresAfter(self::TTL);
 
             return $this->spotify->getTrack($user, $id);

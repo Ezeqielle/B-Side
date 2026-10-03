@@ -153,7 +153,12 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                     <td class="text-muted-foreground py-2 text-right tabular-nums">{{ track.position + 1 }}</td>
                     <td class="w-full max-w-0 py-2 pr-4 pl-3">
                       <div class="flex items-center gap-3">
-                        <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
+                        <app-track-preview
+                          class="size-9 rounded-md"
+                          [trackId]="track.id"
+                          [name]="track.name"
+                          [imageUrl]="track.imageUrl"
+                        />
                         <div class="min-w-0">
                           <p class="truncate font-medium" [title]="track.name">{{ track.name }}</p>
                           <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>

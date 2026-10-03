@@ -69,7 +69,12 @@ import { groupRemovals } from './removal-groups';
               <ul [id]="'removal-' + $index" class="divide-y border-t px-4">
                 @for (track of group.tracks; track track.id) {
                   <li class="flex items-center gap-3 py-2">
-                    <app-track-preview class="size-9 rounded-md" [trackId]="track.trackId" [name]="track.name" />
+                    <app-track-preview
+                      class="size-9 rounded-md"
+                      [trackId]="track.trackId"
+                      [name]="track.name"
+                      [imageUrl]="track.imageUrl"
+                    />
                     <div class="min-w-0 flex-1">
                       <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                       <p class="text-muted-foreground truncate text-xs">

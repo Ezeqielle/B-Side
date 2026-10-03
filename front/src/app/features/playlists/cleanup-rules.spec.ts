@@ -10,6 +10,7 @@ function track(changes: Partial<PlaylistTrackStat>): PlaylistTrackStat {
     name: 'Song',
     artistName: 'Artist',
     albumName: 'Album',
+    imageUrl: null,
     durationMs: 200_000,
     addedAt: '2020-01-01T00:00:00Z',
     plays: 10,

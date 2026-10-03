@@ -135,6 +135,7 @@ class PlaylistControllerTest extends WebTestCase
         self::assertSame([self::SONG_A_OTHER_ALBUM, self::SONG_C], array_column($tracks, 'id'));
         self::assertSame([2, 0], array_column($tracks, 'plays'));
         self::assertNull($tracks[1]['lastPlayedAt']);
+        self::assertSame('https://i.scdn.co/image/' . self::SONG_C, $tracks[1]['imageUrl'], 'Pochette gardée à la synchro');
 
         $this->client->request('GET', '/api/playlists/discover/tracks');
         self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
@@ -226,6 +227,7 @@ class PlaylistControllerTest extends WebTestCase
             'id' => self::SONG_C,
             'name' => 'Song C',
             'artistName' => 'Artist C',
+            'imageUrl' => 'https://i.scdn.co/image/' . self::SONG_C,
             'playlists' => ['Mix', 'Road trip'],
         ]], $this->get('/api/playlists/duplicates'));
         self::assertSame([], $this->get('/api/playlists/missing'));
@@ -500,7 +502,7 @@ class PlaylistControllerTest extends WebTestCase
                 'uri' => 'spotify:track:' . $id,
                 'name' => $name,
                 'artists' => [['id' => 'artist', 'name' => $artist]],
-                'album' => ['name' => 'Album', 'artists' => [['name' => $artist]], 'images' => []],
+                'album' => ['name' => 'Album', 'artists' => [['name' => $artist]], 'images' => [['url' => 'https://i.scdn.co/image/' . $id]]],
                 'duration_ms' => 200000,
             ],
         ];

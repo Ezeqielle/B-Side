@@ -8,6 +8,7 @@ function removal(id: number, removedAt: string, playlistId: string, restoredAt: 
     name: `Song ${id}`,
     artistName: 'Artist',
     albumName: 'Album',
+    imageUrl: null,
     playlistId,
     playlistName: playlistId,
     position: id,

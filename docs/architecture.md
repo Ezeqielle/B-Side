@@ -42,7 +42,8 @@ Tables :
 - Toutes acceptent un `App\Stats\PlayFilter` en query string : `from`, `to` (jours inclus), `artist`, `tz` (fuseau du navigateur, pour les périodes et les heures). Ce même filtre servira à créer des playlists.
 - Une écoute ne compte qu'au-delà de 30 secondes, comme chez Spotify. Temps d'écoute et taux d'écoutes passées prennent tout en compte.
 - Côté front, le filtre est dans l'URL (`/stats?year=2021&artist=…`) : chaque vue le modifie par un simple lien.
-- Images du podium : `GET /api/artwork/track/{id}` et `/api/artwork/artist?name=…` redirigent vers l'image Spotify (404 sans image). Une requête Spotify par image, gardée 30 jours en cache (`App\Stats\Artwork`).
+- Pochettes : `track.image_url` (300 px, chargée au défilement), enregistrée à la synchro des playlists et renvoyée avec chaque titre. Pour un titre jamais vu dans une playlist (stats, absents des playlists), `GET /api/artwork/track/{id}` la demande à Spotify puis la garde dans `track` ; à réserver aux listes courtes (`trackArtwork()` côté front).
+- Photos d'artistes : `GET /api/artwork/artist?name=…` redirige vers l'image Spotify (404 sans image). Une requête Spotify par image, gardée 30 jours en cache (`App\Stats\Artwork`).
 - Extraits au survol : `GET /api/preview/track/{id}` redirige vers le MP3 Deezer (404 sans extrait). Titre retrouvé chez Deezer par son ISRC (pris chez Spotify), sinon par son nom et son artiste, correspondance gardée 30 jours (absence comprise), URL 10 min (`App\Stats\Preview`, `App\Deezer\DeezerApi`). Côté front, `PreviewPlayer` et la directive `appPreview`.
 
 ## Playlists
@@ -50,7 +51,8 @@ Tables :
 1. `POST /api/playlists/sync` envoie `SyncPlaylists` au worker. `App\Playlist\PlaylistSync` lit `/me/playlists`, puis le contenu des seules playlists dont le `snapshot_id` a changé (50 titres par requête).
 2. Spotify ne donne le contenu qu'au propriétaire et aux collaborateurs : les playlists suivies sont gardées avec `readable = false`, sans contenu. Un refus (403) n'est redemandé qu'à la modification suivante.
 3. Les titres likés (`GET /me/tracks`) sont rangés comme une playlist à part, `spotify_id = 'liked'` (`Playlist::LIKED`). Sans `snapshot_id`, leur première page (total et 50 derniers likes) sert d'empreinte : une seule requête quand rien n'a changé, sinon relecture complète en la réutilisant. Un 403 ou 404 les passe en `readable = false`.
-4. Les playlists retirées de la bibliothèque sont supprimées. `user.playlists_synced_at` change à la fin de chaque synchro : le front s'en sert pour savoir qu'elle est terminée.
+4. Chaque titre est enregistré avec sa durée et sa pochette (`track.image_url`).
+5. Les playlists retirées de la bibliothèque sont supprimées. `user.playlists_synced_at` change à la fin de chaque synchro : le front s'en sert pour savoir qu'elle est terminée.
 
 Tables :
 

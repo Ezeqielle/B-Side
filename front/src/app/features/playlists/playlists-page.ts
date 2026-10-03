@@ -8,7 +8,7 @@ import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HistoryApi } from '../../core/history-api';
 import { PlaylistsApi } from '../../core/playlists-api';
-import { TrackPreview } from '../../core/track-preview';
+import { TrackPreview, trackArtwork } from '../../core/track-preview';
 import { PlaylistTable } from './playlist-table';
 import { SincePipe } from './since';
 
@@ -130,7 +130,12 @@ import { SincePipe } from './since';
                 <ul class="space-y-3">
                   @for (track of duplicates.value() ?? []; track track.id) {
                     <li class="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3">
-                      <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
+                      <app-track-preview
+                        class="size-9 rounded-md"
+                        [trackId]="track.id"
+                        [name]="track.name"
+                        [imageUrl]="track.imageUrl"
+                      />
                       <div class="min-w-0">
                         <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                         <p class="text-muted-foreground truncate text-xs">{{ track.artistName }}</p>
@@ -158,7 +163,12 @@ import { SincePipe } from './since';
                   @for (track of missing.value() ?? []; track track.id; let i = $index) {
                     <li class="grid grid-cols-[1.5rem_auto_minmax(0,1fr)_auto] items-center gap-x-3">
                       <span class="text-muted-foreground text-right text-sm tabular-nums">{{ i + 1 }}</span>
-                      <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
+                      <app-track-preview
+                        class="size-9 rounded-md"
+                        [trackId]="track.id"
+                        [name]="track.name"
+                        [imageUrl]="artwork(track)"
+                      />
                       <div class="min-w-0">
                         <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                         <p class="text-muted-foreground truncate text-xs">
@@ -193,6 +203,7 @@ export class PlaylistsPage {
   protected readonly playlists = this.api.list();
   protected readonly duplicates = this.api.duplicates();
   protected readonly missing = this.api.missing(20);
+  protected readonly artwork = trackArtwork;
   private readonly history = inject(HistoryApi).summary();
 
   protected readonly syncing = signal(false);

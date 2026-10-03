@@ -5,6 +5,7 @@ import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { apiResource } from '../../core/api-resource';
 import { TimeRange, Track } from '../../core/models';
 import { StatsApi } from '../../core/stats-api';
+import { trackArtwork } from '../../core/track-preview';
 import { CardTrack, TrackCard } from './track-card';
 
 /** Spotify ne remonte pas au-delà d'un an : le top « depuis toujours » vient de l'historique importé. */
@@ -100,7 +101,7 @@ export class TopTracksPage {
           name: track.name,
           artists: [track.artistName],
           album: track.albumName,
-          imageUrl: `/api/artwork/track/${track.id}`,
+          imageUrl: trackArtwork(track),
         }))
       : (this.spotify.value() ?? []),
   );

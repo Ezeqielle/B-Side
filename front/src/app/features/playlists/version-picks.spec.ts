@@ -8,6 +8,7 @@ function version(position: number, recording: number, addedAt: string | null): S
     name: 'Song',
     artistName: 'Artist',
     albumName: 'Album',
+    imageUrl: null,
     durationMs: 200_000,
     addedAt,
     plays: 0,

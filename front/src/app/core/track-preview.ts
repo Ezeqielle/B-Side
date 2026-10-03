@@ -5,6 +5,14 @@ import { PreviewPlayer } from './preview-player';
 import { PreviewDirective } from './preview.directive';
 
 /**
+ * Pochette d'un titre, demandée à Spotify par l'API s'il n'a jamais été vu dans une playlist :
+ * à réserver aux listes courtes, une requête Spotify par titre inconnu.
+ */
+export function trackArtwork(track: { id: string; imageUrl: string | null }): string {
+  return track.imageUrl ?? `/api/artwork/track/${track.id}`;
+}
+
+/**
  * Vignette d'un titre, sa pochette ou à défaut une icône : son extrait se joue au survol, ou au focus clavier.
  * La taille et l'arrondi se règlent sur l'élément hôte.
  */
@@ -29,6 +37,7 @@ import { PreviewDirective } from './preview.directive';
           class="absolute inset-0 size-full object-cover"
           [src]="imageUrl()"
           alt=""
+          loading="lazy"
           decoding="async"
           (error)="failed.set(true)"
         />
@@ -58,8 +67,8 @@ export class TrackPreview {
   readonly trackId = input.required<string>();
   /** Nom du titre, pour les lecteurs d'écran. */
   readonly name = input.required<string>();
-  /** Pochette, remplacée par l'icône de l'extrait si elle ne charge pas. */
-  readonly imageUrl = input<string>();
+  /** Pochette, remplacée par l'icône de l'extrait si elle manque ou ne charge pas. */
+  readonly imageUrl = input<string | null>();
 
   private readonly player = inject(PreviewPlayer);
 

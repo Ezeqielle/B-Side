@@ -1,6 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { StatsApi } from '../../core/stats-api';
+import { trackArtwork } from '../../core/track-preview';
 import { Ranking, RankingEntry } from './ranking';
 import { StatsFilter } from './stats-filter';
 
@@ -59,7 +60,7 @@ export class StatsTops {
       key: track.id,
       name: track.name,
       artist: track.artistName,
-      imageUrl: `/api/artwork/track/${track.id}`,
+      imageUrl: trackArtwork(track),
       trackId: track.id,
       plays: track.plays,
     })),

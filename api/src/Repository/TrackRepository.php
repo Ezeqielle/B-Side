@@ -43,7 +43,7 @@ class TrackRepository extends ServiceEntityRepository
     }
 
     /**
-     * Ajoute en une requête les titres inconnus, et complète la durée de ceux venus de l'historique.
+     * Ajoute en une requête les titres inconnus, et complète la durée et la pochette de ceux déjà connus.
      *
      * @param list<SpotifyTrack> $spotifyTracks
      */
@@ -57,13 +57,17 @@ class TrackRepository extends ServiceEntityRepository
                 'artist_name' => $track->albumArtist,
                 'album_name' => $track->album,
                 'duration_ms' => $track->durationMs,
+                'image_url' => $track->thumbnailUrl,
             ];
         }
 
         $this->getEntityManager()->getConnection()->executeStatement(<<<'SQL'
-            INSERT INTO track (id, name, artist_name, album_name, duration_ms)
-            SELECT * FROM json_to_recordset(:tracks) AS t(id varchar, name text, artist_name text, album_name text, duration_ms integer)
-            ON CONFLICT (id) DO UPDATE SET duration_ms = EXCLUDED.duration_ms WHERE track.duration_ms IS NULL
+            INSERT INTO track (id, name, artist_name, album_name, duration_ms, image_url)
+            SELECT * FROM json_to_recordset(:tracks) AS t(id varchar, name text, artist_name text, album_name text, duration_ms integer, image_url text)
+            ON CONFLICT (id) DO UPDATE SET
+                duration_ms = COALESCE(track.duration_ms, EXCLUDED.duration_ms),
+                image_url = COALESCE(EXCLUDED.image_url, track.image_url)
+            WHERE track.duration_ms IS NULL OR track.image_url IS DISTINCT FROM COALESCE(EXCLUDED.image_url, track.image_url)
             SQL, ['tracks' => json_encode(array_values($tracks), \JSON_THROW_ON_ERROR)]);
     }
 }

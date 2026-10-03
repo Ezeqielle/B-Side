@@ -67,6 +67,6 @@ class SongVersionsTest extends TestCase
 
     private static function track(int $position, string $name, string $artist, int $durationMs): PlaylistTrackStat
     {
-        return new PlaylistTrackStat($position, 'id' . $position, $name, $artist, 'Album', $durationMs, null, 0, 0, 0.0, null);
+        return new PlaylistTrackStat($position, 'id' . $position, $name, $artist, 'Album', $durationMs, null, null, 0, 0, 0.0, null);
     }
 }

@@ -14,6 +14,7 @@ final readonly class DuplicateTrack
         public string $id,
         public string $name,
         public string $artistName,
+        public ?string $imageUrl,
         public array $playlists,
     ) {
     }

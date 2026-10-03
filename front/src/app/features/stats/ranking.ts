@@ -46,7 +46,12 @@ export interface RankedEntry extends RankingEntry {
         >
           <span class="text-muted-foreground text-right text-sm tabular-nums">{{ i + 4 }}</span>
           @if (entry.trackId; as trackId) {
-            <app-track-preview class="size-9 rounded-md" [trackId]="trackId" [name]="entry.name" />
+            <app-track-preview
+              class="size-9 rounded-md"
+              [trackId]="trackId"
+              [name]="entry.name"
+              [imageUrl]="entry.imageUrl"
+            />
             <div class="min-w-0">
               <p class="truncate text-sm font-medium" [title]="entry.name">{{ entry.name }}</p>
               <a

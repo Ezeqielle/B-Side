@@ -52,6 +52,19 @@ class ArtworkControllerTest extends WebTestCase
         self::assertSame(1, $mock->getRequestsCount());
     }
 
+    public function testKnownCoverIsServedWithoutSpotify(): void
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->persist(new Track('0000000000000000000002', 'Song B', 'Artist B', 'Album B', imageUrl: 'https://i.scdn.co/image/b'));
+        $em->flush();
+        $mock = $this->mockSpotify();
+
+        $this->client->request('GET', '/api/artwork/track/0000000000000000000002');
+
+        self::assertResponseRedirects('https://i.scdn.co/image/b');
+        self::assertSame(0, $mock->getRequestsCount());
+    }
+
     public function testArtistIsFoundThroughOneOfItsTracks(): void
     {
         $this->mockSpotify();

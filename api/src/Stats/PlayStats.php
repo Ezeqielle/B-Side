@@ -153,13 +153,14 @@ final readonly class PlayStats
      */
     private function rankTracks(QueryBuilder $plays, int $limit): array
     {
-        /** @var list<array{id: string, name: string, artist_name: string, album_name: string, plays: int, ms_played: int, skip_rate: string, last_played_at: string}> $rows */
+        /** @var list<array{id: string, name: string, artist_name: string, album_name: string, image_url: ?string, plays: int, ms_played: int, skip_rate: string, last_played_at: string}> $rows */
         $rows = $plays
             ->select(
                 't.id',
                 't.name',
                 't.artist_name',
                 't.album_name',
+                't.image_url',
                 self::PLAYS . ' AS plays',
                 self::MS_PLAYED . ' AS ms_played',
                 self::SKIP_RATE . ' AS skip_rate',
@@ -177,6 +178,7 @@ final readonly class PlayStats
             name: $row['name'],
             artistName: $row['artist_name'],
             albumName: $row['album_name'],
+            imageUrl: $row['image_url'],
             plays: $row['plays'],
             msPlayed: (int) $row['ms_played'],
             skipRate: (float) $row['skip_rate'],

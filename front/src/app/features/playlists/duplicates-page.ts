@@ -101,7 +101,12 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
                     [checked]="isRemoved(version, keptVersion)"
                     (checkedChange)="override(track.position, $event)"
                   />
-                  <app-track-preview class="size-9 rounded-md" [trackId]="track.id" [name]="track.name" />
+                  <app-track-preview
+                    class="size-9 rounded-md"
+                    [trackId]="track.id"
+                    [name]="track.name"
+                    [imageUrl]="track.imageUrl"
+                  />
                   <div class="min-w-0 flex-1">
                     <p class="truncate text-sm font-medium" [title]="track.name">{{ track.name }}</p>
                     <p class="text-muted-foreground truncate text-xs">

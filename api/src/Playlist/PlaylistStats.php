@@ -89,9 +89,9 @@ final readonly class PlaylistStats
      */
     public function tracks(Playlist $playlist, PlayFilter $filter): array
     {
-        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
+        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, image_url: ?string, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
         $rows = $this->withListened($playlist->getUser(), $filter, '
-            SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, pt.added_at,
+            SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, t.image_url, pt.added_at,
                 COALESCE(l.plays, 0) AS plays,
                 COALESCE(l.starts, 0) AS starts,
                 COALESCE(l.skips::float / NULLIF(l.starts, 0), 0) AS skip_rate,
@@ -110,6 +110,7 @@ final readonly class PlaylistStats
             artistName: $row['artist_name'],
             albumName: $row['album_name'],
             durationMs: $row['duration_ms'],
+            imageUrl: $row['image_url'],
             addedAt: self::date($row['added_at']),
             plays: $row['plays'],
             starts: $row['starts'],
@@ -135,9 +136,10 @@ final readonly class PlaylistStats
      */
     public function duplicates(User $user, int $limit): array
     {
-        /** @var list<array{id: string, name: string, artist_name: string, playlists: string}> $rows */
+        /** @var list<array{id: string, name: string, artist_name: string, image_url: ?string, playlists: string}> $rows */
         $rows = $this->connection->fetchAllAssociative('
             SELECT MIN(t.id) AS id, MIN(t.name) AS name, MIN(t.artist_name) AS artist_name,
+                (array_agg(t.image_url ORDER BY t.id))[1] AS image_url,
                 array_to_json(array_agg(pl.name ORDER BY lower(pl.name))) AS playlists
             FROM playlist pl
             INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
@@ -153,6 +155,7 @@ final readonly class PlaylistStats
             id: $row['id'],
             name: $row['name'],
             artistName: $row['artist_name'],
+            imageUrl: $row['image_url'],
             playlists: json_decode($row['playlists'], true, flags: \JSON_THROW_ON_ERROR),
         ), $rows);
     }

@@ -18,11 +18,21 @@ class Artwork
     }
 
     /**
-     * Pochette de l'album du titre.
+     * Pochette de l'album du titre, gardée avec lui : Spotify n'est appelé que pour un titre jamais vu dans une playlist.
      */
     public function forTrack(User $user, string $trackId): ?string
     {
-        return $this->catalog->track($user, $trackId)->imageUrl;
+        $imageUrl = $this->connection->fetchOne('SELECT image_url FROM track WHERE id = ?', [$trackId]);
+        if (\is_string($imageUrl)) {
+            return $imageUrl;
+        }
+
+        $imageUrl = $this->catalog->track($user, $trackId)->thumbnailUrl;
+        if (null !== $imageUrl) {
+            $this->connection->executeStatement('UPDATE track SET image_url = ? WHERE id = ?', [$imageUrl, $trackId]);
+        }
+
+        return $imageUrl;
     }
 
     /**

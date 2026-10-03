@@ -9,6 +9,7 @@ final readonly class TrackStat
         public string $name,
         public string $artistName,
         public string $albumName,
+        public ?string $imageUrl,
         public int $plays,
         public int $msPlayed,
         public float $skipRate,

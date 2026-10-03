@@ -47,6 +47,7 @@ export interface TrackStat {
   name: string;
   artistName: string;
   albumName: string;
+  imageUrl: string | null;
   plays: number;
   msPlayed: number;
   skipRate: number;
@@ -115,6 +116,7 @@ export interface PlaylistTrackStat {
   artistName: string;
   albumName: string;
   durationMs: number | null;
+  imageUrl: string | null;
   addedAt: string | null;
   plays: number;
   starts: number;
@@ -136,6 +138,7 @@ export interface DuplicateTrack {
   id: string;
   name: string;
   artistName: string;
+  imageUrl: string | null;
   playlists: string[];
 }
 
@@ -149,6 +152,7 @@ export interface RemovedTrack {
   name: string;
   artistName: string;
   albumName: string;
+  imageUrl: string | null;
   playlistId: string;
   playlistName: string;
   position: number;

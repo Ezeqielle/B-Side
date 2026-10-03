@@ -39,7 +39,7 @@ Tables :
 
 `GET /api/stats/{overview,tracks,artists,timeline,clock}`, calculées en SQL par `App\Stats\PlayStats` sur les écoutes importées.
 
-- Toutes acceptent un `App\Stats\PlayFilter` en query string : `from`, `to` (jours inclus), `artist`, `tz` (fuseau du navigateur, pour les périodes et les heures). Ce même filtre servira à créer et nettoyer des playlists.
+- Toutes acceptent un `App\Stats\PlayFilter` en query string : `from`, `to` (jours inclus), `artist`, `tz` (fuseau du navigateur, pour les périodes et les heures). Ce même filtre servira à créer des playlists.
 - Une écoute ne compte qu'au-delà de 30 secondes, comme chez Spotify. Temps d'écoute et taux d'écoutes passées prennent tout en compte.
 - Côté front, le filtre est dans l'URL (`/stats?year=2021&artist=…`) : chaque vue le modifie par un simple lien.
 - Images du podium : `GET /api/artwork/track/{id}` et `/api/artwork/artist?name=…` redirigent vers l'image Spotify (404 sans image). Une requête Spotify par image, gardée 30 jours en cache (`App\Stats\Artwork`).
@@ -63,6 +63,31 @@ Stats (`App\Playlist\PlaylistStats`) : `GET /api/playlists`, `/overview`, `/{id}
 - L'historique donne l'artiste de l'album : côté playlist, on prend aussi celui de l'album.
 - Comme pour les stats d'écoute, un titre n'est « écouté » qu'au-delà de 30 secondes.
 - Les titres likés comptent comme une playlist, sauf dans le nombre de playlists de `/overview` et pour les doublons.
+
+## Nettoyage
+
+`App\Playlist\PlaylistCleanup`, appelé par `POST /api/playlists/{id}/remove` (positions des titres) et `POST /api/removals/restore`.
+
+1. Rien n'est définitif : un titre retiré est d'abord ajouté à la playlist privée « Spotylist · Corbeille », créée au premier retrait (`user.trash_playlist_id`). La synchro l'ignore, et l'oublie si elle a disparu de la bibliothèque : une autre est créée au retrait suivant.
+2. Chaque titre retiré est noté dans `removal`, avec sa playlist (id et nom), sa position et sa date d'ajout. Les titres d'un même retrait partagent leur `removed_at`. `GET /api/removals` donne le journal.
+3. Traitement par lots de 40 (la limite de `/me/library`) : corbeille, retrait de la source, journal. Après une erreur, chaque lot retiré est dans le journal.
+4. Spotify retire toutes les occurrences d'un titre d'une playlist : celles qu'on garde sont remises à leur position.
+5. Le contenu en base est mis à jour tout de suite, puis une synchro réaligne positions et versions.
+6. Remise en place : en tête des likes, ou à la fin de sa playlist si elle existe encore. Spotify ne permet pas de rendre la date d'ajout d'origine. Le titre quitte la corbeille, sauf s'il y est pour un autre retrait.
+
+Côté front :
+
+- Page d'une playlist, bouton « Nettoyer » : des règles présélectionnent les titres, à décocher à la main. Elles sont dans l'URL (`?added=6&never=1&idle=24&skip=60&starts=3`, voir `cleanup-rules.ts`). Les durées se comptent jusqu'à la dernière écoute importée, pas jusqu'à aujourd'hui.
+- Page `/journal` : les retraits, à remettre en place un par un ou en entier.
+
+## Doublons
+
+`GET /api/playlists/{id}/versions` regroupe les versions d'un même morceau dans la playlist (`App\Playlist\SongVersions`), testé sur de vraies playlists :
+
+- Même morceau : même titre de base (sans ce qui suit « - » ni ce qui est entre parenthèses), et même artiste ou même durée à 2 s près. La durée rattrape les collaborations et compilations rangées sous un autre artiste d'album ; sans elle, deux artistes différents sont presque toujours des homonymes.
+- Même enregistrement : en plus, même titre aux mentions sans effet près (feat., Original Mix, Radio Edit, Remastered…) et même durée à 2 s près. Un remix, un instrumental ou une autre durée sont une autre version.
+
+Page `/playlists/{id}/doublons` : une version gardée par groupe (la plus anciennement ajoutée par défaut), les autres versions du même enregistrement cochées pour être retirées, les autres versions aussi sur demande. Le retrait passe par la corbeille et le journal.
 
 ## Services Docker
 

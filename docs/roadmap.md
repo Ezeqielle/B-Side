@@ -10,11 +10,13 @@
 - Synchro des playlists et stats croisées avec l'historique : jamais écoutés, souvent passés, dernière écoute, doublons, titres absents des playlists
 - Extraits au survol : `/api/preview/track/{id}` (Deezer, avec cache), directive `appPreview` sur les pochettes, un seul lecteur audio partagé avec fondu, interrupteur dans l'en-tête
 
+- Nettoyage des playlists et des likes par règles réglables, via une playlist corbeille, avec journal et remise en place
+- Doublons : versions d'un même morceau dans une playlist (single, album, remix…), à garder ou retirer
+
 ## Étapes suivantes
 
-1. **Nettoyage des likes et des playlists** (jamais écoutés, souvent passés) : les stats de playlists sont prêtes, reste la suppression via `/me/library` et `DELETE /playlists/{id}/items`
-2. **Création de playlists** à partir d'un `PlayFilter` (`PlayStats::topTracks()`), mix
-3. **Exploration de titres proches** via Last.fm
+1. **Création de playlists** à partir d'un `PlayFilter` (`PlayStats::topTracks()`), mix
+2. **Exploration de titres proches** via Last.fm
 
 ## Idées
 

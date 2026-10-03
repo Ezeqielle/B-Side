@@ -5,7 +5,7 @@ namespace App\Stats;
 use Symfony\Component\Validator\Constraints as Assert;
 
 /**
- * Sélection d'écoutes : sert aux stats, et servira à créer ou nettoyer des playlists.
+ * Sélection d'écoutes : sert aux stats, et servira à créer des playlists.
  *
  * Les dates sont des jours, bornes incluses, dans le fuseau de l'utilisateur.
  */

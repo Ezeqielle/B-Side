@@ -1,26 +1,23 @@
-import { DatePipe, DecimalPipe, PercentPipe } from '@angular/common';
-import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
-import { RouterLink } from '@angular/router';
+import { DatePipe, DecimalPipe, Location, PercentPipe } from '@angular/common';
+import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
+import { Router, RouterLink } from '@angular/router';
+import { HlmAlertDialogImports } from '@spartan-ng/helm/alert-dialog';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
+import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
-import { PlaylistTrackStat } from '../../core/models';
+import { HistoryApi } from '../../core/history-api';
+import { LIKED_PLAYLIST_ID, PlaylistTrackStat } from '../../core/models';
 import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
+import { CleanupPanel } from './cleanup-panel';
+import { PRESETS, matchesRules, paramsOf, rulesOf } from './cleanup-rules';
 import { PlaylistCover } from './playlist-cover';
 import { SincePipe } from './since';
 import { Sort, SortHeader, sortRows } from './sort-header';
 
 /** Lignes affichées d'un coup : les titres likés se comptent par milliers. */
 const PAGE_SIZE = 100;
-
-const FILTERS = [
-  { value: 'all', label: 'Tous' },
-  { value: 'never', label: 'Jamais écoutés' },
-  { value: 'skipped', label: 'Souvent passés' },
-] as const;
-
-type Filter = (typeof FILTERS)[number]['value'];
 
 const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | null> = {
   position: (t) => t.position,
@@ -32,7 +29,8 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 };
 
 /**
- * Titres d'une playlist avec leurs écoutes : de quoi repérer ceux à retirer.
+ * Titres d'une playlist avec leurs écoutes. En mode nettoyage, les règles (gardées dans l'URL)
+ * présélectionnent des titres, que l'on peut décocher avant de les retirer.
  */
 @Component({
   selector: 'app-playlist-page',
@@ -41,9 +39,12 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
     DecimalPipe,
     PercentPipe,
     RouterLink,
+    HlmAlertDialogImports,
     HlmButtonImports,
     HlmCardImports,
+    HlmCheckboxImports,
     HlmSkeletonImports,
+    CleanupPanel,
     PlaylistCover,
     SincePipe,
     SortHeader,
@@ -54,7 +55,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
       ← Toutes les playlists
     </a>
 
-    @if (playlist(); as p) {
+    @if (playlist.value(); as p) {
       <div class="mb-6 flex items-center gap-4">
         <app-playlist-cover class="size-20 sm:size-24" [playlist]="p" />
         <div class="min-w-0">
@@ -69,31 +70,82 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
       </div>
     }
 
+    @if (outcome(); as message) {
+      <p class="bg-muted mb-6 rounded-lg px-4 py-3 text-sm" role="status">
+        {{ message }} <a routerLink="/journal" class="underline">Voir le journal</a>
+      </p>
+    }
+
     @if (tracks.error()) {
       <p class="text-destructive" role="alert">Impossible de récupérer cette playlist.</p>
     } @else if (tracks.value()) {
       <section hlmCard>
         <div hlmCardHeader class="flex flex-wrap items-center justify-between gap-2">
           <h2 hlmCardTitle>Titres</h2>
-          <div class="flex gap-1" role="group" aria-label="Afficher">
-            @for (option of filters; track option.value) {
-              <button
-                hlmBtn
-                size="xs"
-                [variant]="filter() === option.value ? 'secondary' : 'ghost'"
-                [attr.aria-pressed]="filter() === option.value"
-                (click)="filter.set(option.value)"
-              >
-                {{ option.label }} ({{ counts()[option.value] }})
-              </button>
-            }
-          </div>
+          @if (rules()) {
+            <button hlmBtn size="xs" variant="ghost" (click)="rules.set(null)">Fermer le nettoyage</button>
+          } @else {
+            <button hlmBtn size="xs" variant="outline" (click)="rules.set(presets[0].rules)">Nettoyer</button>
+          }
         </div>
         <div hlmCardContent>
+          @if (rules(); as r) {
+            <app-cleanup-panel class="mb-4" [rules]="r" (rulesChange)="rules.set($event)" [reference]="reference()" />
+
+            <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm" role="status">
+                <strong>{{ selected().length | number }}</strong> titres sélectionnés sur
+                {{ tracks.value()!.length | number }}
+                @if (excluded().size) {
+                  <span class="text-muted-foreground">({{ excluded().size | number }} décochés)</span>
+                }
+              </p>
+              <hlm-alert-dialog>
+                <button
+                  hlmAlertDialogTrigger
+                  hlmBtn
+                  size="sm"
+                  variant="destructive"
+                  [disabled]="!selected().length || removing()"
+                >
+                  {{ removing() ? 'Retrait en cours…' : 'Retirer ' + (selected().length | number) + ' titres' }}
+                </button>
+                <hlm-alert-dialog-content *hlmAlertDialogPortal="let ctx">
+                  <hlm-alert-dialog-header>
+                    <h2 hlmAlertDialogTitle>
+                      Retirer {{ selected().length | number }} titres
+                      {{ isLiked() ? 'de tes likes' : 'de « ' + playlist.value()?.name + ' »' }} ?
+                    </h2>
+                    <p hlmAlertDialogDescription>
+                      Ils sont d'abord copiés dans ta playlist « Spotylist · Corbeille », et notés dans le
+                      journal : tu pourras les remettre en place.
+                    </p>
+                  </hlm-alert-dialog-header>
+                  <hlm-alert-dialog-footer>
+                    <button hlmAlertDialogCancel variant="outline">Annuler</button>
+                    <button hlmAlertDialogAction variant="destructive" (click)="ctx.close(); remove()">
+                      Retirer
+                    </button>
+                  </hlm-alert-dialog-footer>
+                </hlm-alert-dialog-content>
+              </hlm-alert-dialog>
+            </div>
+          }
+
           <div class="-mx-6 overflow-x-auto px-6">
             <table class="w-full text-sm">
               <thead class="text-muted-foreground border-b text-left text-xs whitespace-nowrap">
                 <tr>
+                  @if (rules()) {
+                    <th class="w-8 pb-2" scope="col">
+                      <hlm-checkbox
+                        aria-label="Tout sélectionner"
+                        [checked]="!excluded().size"
+                        [indeterminate]="!!excluded().size && !!selected().length"
+                        (checkedChange)="excludeAll(!$event)"
+                      />
+                    </th>
+                  }
                   <th class="w-10 pb-2 text-right" appSortHeader="position" [desc]="false" [(sort)]="sort">#</th>
                   <th class="pb-2 pl-3" appSortHeader="name" [desc]="false" [(sort)]="sort">Titre</th>
                   <th class="pb-2 pl-4 text-right" appSortHeader="plays" [(sort)]="sort">Écoutes</th>
@@ -108,7 +160,16 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
               </thead>
               <tbody>
                 @for (track of shownRows(); track track.position) {
-                  <tr class="border-b last:border-0">
+                  <tr class="border-b last:border-0" [class.opacity-50]="excluded().has(track.position)">
+                    @if (rules()) {
+                      <td class="py-2">
+                        <hlm-checkbox
+                          [aria-label]="'Retirer ' + track.name"
+                          [checked]="!excluded().has(track.position)"
+                          (checkedChange)="exclude(track.position, !$event)"
+                        />
+                      </td>
+                    }
                     <td class="text-muted-foreground py-2 text-right tabular-nums">{{ track.position + 1 }}</td>
                     <td class="w-full max-w-0 py-2 pr-4 pl-3">
                       <div class="flex items-center gap-3">
@@ -123,7 +184,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                       {{ track.plays | number }}
                     </td>
                     <td class="hidden py-2 pl-4 text-right tabular-nums sm:table-cell">
-                      {{ track.plays ? (track.skipRate | percent) : '—' }}
+                      {{ track.starts ? (track.skipRate | percent) : '—' }}
                     </td>
                     <td class="py-2 pl-4 text-right whitespace-nowrap">{{ track.lastPlayedAt | since: 'jamais' }}</td>
                     <td class="text-muted-foreground hidden py-2 pl-4 text-right whitespace-nowrap md:table-cell">
@@ -132,7 +193,9 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="6" class="text-muted-foreground py-4 text-center">Aucun titre.</td>
+                    <td [attr.colspan]="rules() ? 7 : 6" class="text-muted-foreground py-4 text-center">
+                      {{ rules() ? 'Aucun titre ne répond à ces règles.' : 'Aucun titre.' }}
+                    </td>
                   </tr>
                 }
               </tbody>
@@ -155,45 +218,120 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 export class PlaylistPage {
   /** Id Spotify, depuis l'URL. */
   readonly id = input.required<string>();
+  /** Règles de nettoyage, depuis l'URL (voir CleanupParams). */
+  readonly added = input<string>();
+  readonly never = input<string>();
+  readonly idle = input<string>();
+  readonly skip = input<string>();
+  readonly starts = input<string>();
 
-  protected readonly filters = FILTERS;
-  protected readonly filter = signal<Filter>('all');
+  protected readonly presets = PRESETS;
   protected readonly sort = signal<Sort>({ key: 'position', desc: false });
 
   private readonly api = inject(PlaylistsApi);
-  protected readonly playlist = this.api.playlist(this.id).value;
+  private readonly router = inject(Router);
+  private readonly location = inject(Location);
+  protected readonly playlist = this.api.playlist(this.id);
   protected readonly tracks = this.api.tracks(this.id);
+  private readonly history = inject(HistoryApi).summary();
+
+  protected readonly isLiked = computed(() => this.id() === LIKED_PLAYLIST_ID);
 
   protected readonly duration = computed(() => {
-    const minutes = Math.round((this.playlist()?.durationMs ?? 0) / 60_000);
+    const minutes = Math.round((this.playlist.value()?.durationMs ?? 0) / 60_000);
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
   });
 
-  /** Les titres à nettoyer sont désignés par le serveur. */
-  private readonly matching: Record<Filter, (track: PlaylistTrackStat) => boolean> = {
-    all: () => true,
-    never: (t) => t.cleanup === 'never_played',
-    skipped: (t) => t.cleanup === 'often_skipped',
-  };
+  /** Règles de nettoyage, `null` hors nettoyage. Modifiées ici, elles sont recopiées dans l'URL. */
+  protected readonly rules = linkedSignal(() =>
+    rulesOf({ added: this.added(), never: this.never(), idle: this.idle(), skip: this.skip(), starts: this.starts() }),
+  );
 
-  protected readonly counts = computed(() => {
+  /** Dernière écoute importée : les durées des règles se comptent jusque-là. */
+  protected readonly reference = computed(() => this.history.value()?.lastPlayedAt ?? null);
+
+  /** Titres retenus par les règles, ou tous hors nettoyage. */
+  private readonly candidates = computed(() => {
     const tracks = this.tracks.value() ?? [];
-    return Object.fromEntries(
-      FILTERS.map(({ value }) => [value, tracks.filter(this.matching[value]).length]),
-    ) as Record<Filter, number>;
+    const rules = this.rules();
+    if (!rules) {
+      return tracks;
+    }
+    const reference = Date.parse(this.reference() ?? '') || Date.now();
+    return tracks.filter((track) => matchesRules(track, rules, reference));
   });
+
+  /** Positions décochées à la main, oubliées en changeant de playlist ou après un retrait. */
+  protected readonly excluded = linkedSignal<string, ReadonlySet<number>>({
+    source: this.id,
+    computation: () => new Set(),
+  });
+
+  protected readonly selected = computed(() =>
+    this.candidates().filter((track) => !this.excluded().has(track.position)),
+  );
 
   protected readonly rows = computed(() => {
     const { key, desc } = this.sort();
-    const tracks = this.tracks.value() ?? [];
-    return sortRows(tracks.filter(this.matching[this.filter()]), COLUMNS[key], desc);
+    return sortRows(this.candidates(), COLUMNS[key], desc);
   });
 
   protected readonly pageSize = PAGE_SIZE;
-  /** Nombre de lignes affichées, remis à une page à chaque changement de playlist, de filtre ou de tri. */
+  /** Nombre de lignes affichées, remis à une page à chaque changement de playlist, de règles ou de tri. */
   protected readonly shown = linkedSignal({
-    source: () => [this.id(), this.filter(), this.sort()],
+    source: () => [this.id(), this.rules(), this.sort()],
     computation: () => PAGE_SIZE,
   });
   protected readonly shownRows = computed(() => this.rows().slice(0, this.shown()));
+
+  protected readonly removing = signal(false);
+  protected readonly outcome = signal<string | null>(null);
+
+  constructor() {
+    // Règles dans l'URL, sans navigation : glisser un curseur ne recharge rien
+    effect(() => {
+      const rules = this.rules();
+      const url = this.router.parseUrl(this.router.url);
+      url.queryParams = rules ? paramsOf(rules) : {};
+      this.location.replaceState(this.router.serializeUrl(url));
+    });
+  }
+
+  protected exclude(position: number, excluded: boolean): void {
+    this.excluded.update((set) => {
+      const next = new Set(set);
+      if (excluded) {
+        next.add(position);
+      } else {
+        next.delete(position);
+      }
+      return next;
+    });
+  }
+
+  protected excludeAll(excluded: boolean): void {
+    this.excluded.set(new Set(excluded ? this.candidates().map((track) => track.position) : []));
+  }
+
+  protected remove(): void {
+    this.removing.set(true);
+    this.outcome.set(null);
+    const positions = this.selected().map((track) => track.position);
+    const done = () => {
+      this.removing.set(false);
+      this.excluded.set(new Set());
+      this.playlist.reload();
+      this.tracks.reload();
+    };
+    this.api.remove(this.id(), positions).subscribe({
+      next: ({ removed }) => {
+        this.outcome.set(`${removed} titres retirés, et mis dans la corbeille.`);
+        done();
+      },
+      error: () => {
+        this.outcome.set('Le retrait s\'est interrompu : les titres déjà retirés sont dans la corbeille.');
+        done();
+      },
+    });
+  }
 }

@@ -46,6 +46,16 @@ export class PlaylistsApi {
   }
 
   /**
+   * Retire des titres, par position : ils vont dans la corbeille Spotify et dans le journal.
+   * Les stats changent : le cache est vidé.
+   */
+  remove(id: string, positions: number[]): Observable<{ removed: number }> {
+    return this.http
+      .post<{ removed: number }>(`/api/playlists/${encodeURIComponent(id)}/remove`, { positions })
+      .pipe(finalize(() => this.cache.clear()));
+  }
+
+  /**
    * Lance la synchro, puis vérifie toutes les 2 s, pendant 3 min au plus, si `syncedAt` a changé.
    * Se termine dans tous les cas : il suffit alors de tout recharger. Se désabonner arrête l'attente.
    */

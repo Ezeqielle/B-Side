@@ -38,6 +38,10 @@ export const routes: Routes = [
           import('./features/playlists/duplicates-page').then((m) => m.DuplicatesPage),
       },
       {
+        path: 'playlists/:id/a-garder',
+        loadComponent: () => import('./features/playlists/kept-page').then((m) => m.KeptPage),
+      },
+      {
         path: 'journal',
         loadComponent: () => import('./features/journal/journal-page').then((m) => m.JournalPage),
       },

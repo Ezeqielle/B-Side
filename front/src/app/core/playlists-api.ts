@@ -4,6 +4,7 @@ import { Observable, concatMap, finalize, first, map, switchMap, take, timer } f
 import { ApiCache, ApiParams, TIMEZONE, apiResource } from './api-resource';
 import {
   DuplicateTrack,
+  KeptTrack,
   PlaylistOverview,
   PlaylistStat,
   PlaylistTrackStat,
@@ -40,6 +41,22 @@ export class PlaylistsApi {
   /** Versions d'un même morceau, par groupe d'au moins deux, dans l'ordre de la playlist. */
   versions(id: () => string) {
     return playlists<SongVersion[][]>(() => `/${encodeURIComponent(id())}/versions`);
+  }
+
+  /** Titres à garder : le nettoyage les laisse décochés. */
+  kept(id: () => string) {
+    return playlists<KeptTrack[]>(() => `/${encodeURIComponent(id())}/kept`);
+  }
+
+  /**
+   * Ajoute des titres à garder, ou les rend au nettoyage (`kept` faux).
+   * La liste en cache est oubliée : elle sera relue à la prochaine visite.
+   */
+  keep(id: string, trackIds: string[], kept: boolean): Observable<void> {
+    const url = `/api/playlists/${encodeURIComponent(id)}/kept`;
+    return this.http
+      .post<void>(url, { trackIds, kept })
+      .pipe(finalize(() => this.cache.forget(url)));
   }
 
   duplicates() {

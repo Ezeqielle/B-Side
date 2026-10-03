@@ -127,6 +127,15 @@ export interface PlaylistTrackStat {
   lastPlayedAt: string | null;
 }
 
+/** Titre à garder d'une playlist : le nettoyage le laisse décoché. */
+export interface KeptTrack {
+  id: string;
+  name: string;
+  artistName: string;
+  imageUrl: string | null;
+  keptAt: string;
+}
+
 /**
  * Version d'un morceau dans une playlist : single, album, edit… `recording` est la position du premier
  * titre du même enregistrement, égale pour deux versions identiques.

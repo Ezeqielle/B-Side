@@ -60,3 +60,25 @@ describe('PlaylistsApi.sync', () => {
     http.expectNone((req) => req.url === '/api/playlists/overview');
   });
 });
+
+describe('PlaylistsApi.keep', () => {
+  it('enregistre les titres à garder, puis oublie la liste en cache', () => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    const api = TestBed.inject(PlaylistsApi);
+    const http = TestBed.inject(HttpTestingController);
+    const cache = TestBed.inject(ApiCache);
+    cache.set('/api/playlists/mix/kept?tz=Europe/Paris', []);
+    cache.set('/api/playlists/mix/tracks?tz=Europe/Paris', []);
+
+    api.keep('mix', ['a', 'b'], true).subscribe();
+    const req = http.expectOne({ method: 'POST', url: '/api/playlists/mix/kept' });
+    expect(req.request.body).toEqual({ trackIds: ['a', 'b'], kept: true });
+    req.flush(null, { status: 204, statusText: 'No Content' });
+
+    expect(cache.has('/api/playlists/mix/kept?tz=Europe/Paris')).toBe(false);
+    expect(cache.has('/api/playlists/mix/tracks?tz=Europe/Paris')).toBe(true);
+    http.verify();
+  });
+});

@@ -80,6 +80,7 @@ Stats (`App\Playlist\PlaylistStats`) : `GET /api/playlists`, `/overview`, `/{id}
 Côté front :
 
 - Page d'une playlist, bouton « Nettoyer » : des règles présélectionnent les titres, à décocher à la main. Elles sont dans l'URL (`?added=6&never=1&idle=24&skip=60&starts=3`, voir `cleanup-rules.ts`). Les durées se comptent jusqu'à la dernière écoute importée, pas jusqu'à aujourd'hui.
+- Titres à garder : un titre décoché est enregistré dans `kept_track` (par playlist, `POST /api/playlists/{id}/kept`) et reste décoché aux nettoyages suivants, quelles que soient les règles. Page `/playlists/{id}/a-garder` pour revoir la liste et rendre des titres au nettoyage.
 - Page `/journal` : les retraits, à remettre en place un par un ou en entier.
 
 ## Doublons

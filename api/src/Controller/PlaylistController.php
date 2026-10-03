@@ -2,9 +2,11 @@
 
 namespace App\Controller;
 
+use App\Dto\KeepTracks;
 use App\Dto\RemoveTracks;
 use App\Entity\User;
 use App\Message\SyncPlaylists;
+use App\Playlist\KeptTracks;
 use App\Playlist\PlaylistCleanup;
 use App\Playlist\PlaylistStats;
 use App\Repository\PlaylistRepository;
@@ -113,6 +115,39 @@ class PlaylistController extends AbstractController
 
             return $this->stats->versions($playlist);
         }));
+    }
+
+    /**
+     * Titres à garder : le nettoyage les laisse décochés.
+     */
+    #[Route('/{id}/kept', name: '_kept', methods: ['GET'])]
+    public function kept(#[CurrentUser] User $user, string $id, PlaylistRepository $playlistRepository, KeptTracks $keptTracks): JsonResponse
+    {
+        $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+
+        return $this->json($keptTracks->list($playlist));
+    }
+
+    /**
+     * Ajoute des titres à garder (`kept` vrai), ou les rend au nettoyage.
+     */
+    #[Route('/{id}/kept', name: '_keep', methods: ['POST'])]
+    public function keep(
+        #[CurrentUser] User $user,
+        string $id,
+        #[MapRequestPayload] KeepTracks $payload,
+        PlaylistRepository $playlistRepository,
+        KeptTracks $keptTracks,
+    ): Response {
+        $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+
+        if ($payload->kept) {
+            $keptTracks->keep($playlist, $payload->trackIds);
+        } else {
+            $keptTracks->release($playlist, $payload->trackIds);
+        }
+
+        return new Response(null, Response::HTTP_NO_CONTENT);
     }
 
     /**

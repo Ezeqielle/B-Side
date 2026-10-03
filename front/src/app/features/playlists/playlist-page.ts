@@ -30,7 +30,8 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 
 /**
  * Titres d'une playlist avec leurs écoutes. En mode nettoyage, les règles (gardées dans l'URL)
- * présélectionnent des titres, que l'on peut décocher avant de les retirer.
+ * présélectionnent des titres, que l'on peut décocher avant de les retirer. Un titre décoché est
+ * enregistré comme titre à garder : il reste décoché aux nettoyages suivants, quelles que soient les règles.
  */
 @Component({
   selector: 'app-playlist-page',
@@ -78,12 +79,13 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 
     @if (tracks.error()) {
       <p class="text-destructive" role="alert">Impossible de récupérer cette playlist.</p>
-    } @else if (tracks.value()) {
+    } @else if (tracks.value() && (!rules() || kept.value() || kept.error())) {
       <section hlmCard>
         <div hlmCardHeader class="flex flex-wrap items-center justify-between gap-2">
           <h2 hlmCardTitle>Titres</h2>
           <div class="flex gap-1">
             <a hlmBtn size="xs" variant="ghost" [routerLink]="['/playlists', id(), 'doublons']">Doublons</a>
+            <a hlmBtn size="xs" variant="ghost" [routerLink]="['/playlists', id(), 'a-garder']">Titres à garder</a>
             @if (rules()) {
               <button hlmBtn size="xs" variant="ghost" (click)="rules.set(null)">Fermer le nettoyage</button>
             } @else {
@@ -99,8 +101,8 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
               <p class="text-sm" role="status">
                 <strong>{{ selected().length | number }}</strong> titres sélectionnés sur
                 {{ tracks.value()!.length | number }}
-                @if (excluded().size) {
-                  <span class="text-muted-foreground">({{ excluded().size | number }} décochés)</span>
+                @if (candidates().length - selected().length; as kept) {
+                  <span class="text-muted-foreground">({{ kept | number }} à garder, décochés)</span>
                 }
               </p>
               <app-remove-tracks
@@ -120,8 +122,8 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                     <th class="w-8 pb-2" scope="col">
                       <hlm-checkbox
                         aria-label="Tout sélectionner"
-                        [checked]="!excluded().size"
-                        [indeterminate]="!!excluded().size && !!selected().length"
+                        [checked]="selected().length === candidates().length"
+                        [indeterminate]="!!selected().length && selected().length < candidates().length"
                         (checkedChange)="excludeAll(!$event)"
                       />
                     </th>
@@ -140,13 +142,13 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
               </thead>
               <tbody>
                 @for (track of shownRows(); track track.position) {
-                  <tr class="border-b last:border-0" [class.opacity-50]="excluded().has(track.position)">
+                  <tr class="border-b last:border-0" [class.opacity-50]="rules() && excluded().has(track.id)">
                     @if (rules()) {
                       <td class="py-2">
                         <hlm-checkbox
                           [aria-label]="'Retirer ' + track.name"
-                          [checked]="!excluded().has(track.position)"
-                          (checkedChange)="exclude(track.position, !$event)"
+                          [checked]="!excluded().has(track.id)"
+                          (checkedChange)="exclude(track.id, !$event)"
                         />
                       </td>
                     }
@@ -218,6 +220,7 @@ export class PlaylistPage {
   private readonly location = inject(Location);
   protected readonly playlist = this.api.playlist(this.id);
   protected readonly tracks = this.api.tracks(this.id);
+  protected readonly kept = this.api.kept(this.id);
   private readonly history = inject(HistoryApi).summary();
 
   protected readonly duration = computed(() => {
@@ -234,7 +237,7 @@ export class PlaylistPage {
   protected readonly reference = computed(() => this.history.value()?.lastPlayedAt ?? null);
 
   /** Titres retenus par les règles, ou tous hors nettoyage. */
-  private readonly candidates = computed(() => {
+  protected readonly candidates = computed(() => {
     const tracks = this.tracks.value() ?? [];
     const rules = this.rules();
     if (!rules) {
@@ -244,14 +247,13 @@ export class PlaylistPage {
     return tracks.filter((track) => matchesRules(track, rules, reference));
   });
 
-  /** Positions décochées à la main, oubliées en changeant de playlist ou après un retrait. */
-  protected readonly excluded = linkedSignal<string, ReadonlySet<number>>({
-    source: this.id,
-    computation: () => new Set(),
-  });
+  /** Ids des titres à garder, décochés : enregistrés à chaque clic, relus en changeant de playlist. */
+  protected readonly excluded = linkedSignal<ReadonlySet<string>>(
+    () => new Set((this.kept.value() ?? []).map((track) => track.id)),
+  );
 
   protected readonly selected = computed(() =>
-    this.candidates().filter((track) => !this.excluded().has(track.position)),
+    this.candidates().filter((track) => !this.excluded().has(track.id)),
   );
 
   protected readonly rows = computed(() => {
@@ -280,25 +282,36 @@ export class PlaylistPage {
     });
   }
 
-  protected exclude(position: number, excluded: boolean): void {
+  protected exclude(trackId: string, excluded: boolean): void {
+    this.keep([trackId], excluded);
+  }
+
+  /** Décoche (garde) ou recoche tous les titres retenus par les règles. */
+  protected excludeAll(excluded: boolean): void {
+    this.keep([...new Set(this.candidates().map((track) => track.id))], excluded);
+  }
+
+  /** Coche ou décoche tout de suite, puis enregistre ; en cas d'échec, la liste enregistrée est relue. */
+  private keep(trackIds: string[], kept: boolean): void {
+    if (!trackIds.length) {
+      return;
+    }
     this.excluded.update((set) => {
       const next = new Set(set);
-      if (excluded) {
-        next.add(position);
-      } else {
-        next.delete(position);
+      for (const id of trackIds) {
+        if (kept) {
+          next.add(id);
+        } else {
+          next.delete(id);
+        }
       }
       return next;
     });
-  }
-
-  protected excludeAll(excluded: boolean): void {
-    this.excluded.set(new Set(excluded ? this.candidates().map((track) => track.position) : []));
+    this.api.keep(this.id(), trackIds, kept).subscribe({ error: () => this.kept.reload() });
   }
 
   protected removed(message: string): void {
     this.outcome.set(message);
-    this.excluded.set(new Set());
     this.playlist.reload();
     this.tracks.reload();
   }

@@ -41,6 +41,15 @@ export class ApiCache {
     this.values.set(key, value);
   }
 
+  /** Oublie les réponses d'une URL, quels que soient leurs paramètres. */
+  forget(url: string): void {
+    for (const key of this.values.keys()) {
+      if (key.startsWith(`${url}?`)) {
+        this.values.delete(key);
+      }
+    }
+  }
+
   clear(): void {
     this.values.clear();
   }

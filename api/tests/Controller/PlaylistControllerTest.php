@@ -275,6 +275,31 @@ class PlaylistControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
     }
 
+    public function testKeptTracks(): void
+    {
+        $this->sync();
+        self::assertSame([], $this->get('/api/playlists/road-trip/kept'));
+
+        // Song A n'est pas dans Road trip, et Song B n'est gardé qu'une fois
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/kept', ['trackIds' => [self::SONG_B, self::SONG_A]]);
+        self::assertResponseStatusCodeSame(204);
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/kept', ['trackIds' => [self::SONG_B, self::SONG_C]]);
+        $this->sync();
+
+        $kept = $this->get('/api/playlists/road-trip/kept');
+        self::assertEqualsCanonicalizing([self::SONG_B, self::SONG_C], array_column($kept, 'id'), 'Gardés malgré la synchro');
+        self::assertSame([], $this->get('/api/playlists/mix/kept'), 'Gardés pour cette playlist seulement');
+
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/kept', ['trackIds' => [self::SONG_B], 'kept' => false]);
+        self::assertResponseStatusCodeSame(204);
+        self::assertSame([self::SONG_C], array_column($this->get('/api/playlists/road-trip/kept'), 'id'));
+
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/kept', ['trackIds' => []]);
+        self::assertResponseStatusCodeSame(422);
+        $this->client->jsonRequest('POST', '/api/playlists/discover/kept', ['trackIds' => [self::SONG_A]]);
+        self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
+    }
+
     public function testRemovedTracksGoToTheTrashAndTheJournal(): void
     {
         $this->sync();

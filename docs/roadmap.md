@@ -10,7 +10,7 @@
 - Synchro des playlists et stats croisées avec l'historique : jamais écoutés, souvent passés, dernière écoute, doublons, titres absents des playlists
 - Extraits au survol : `/api/preview/track/{id}` (Deezer, avec cache), directive `appPreview` sur les pochettes, un seul lecteur audio partagé avec fondu, interrupteur dans l'en-tête
 
-- Nettoyage des playlists et des likes par règles réglables, via une playlist corbeille, avec journal et remise en place
+- Nettoyage des playlists et des likes par règles réglables, via une playlist corbeille, avec journal, remise en place et liste de titres à garder
 - Doublons : versions d'un même morceau dans une playlist (single, album, edit…), à garder ou retirer
 
 ## Étapes suivantes

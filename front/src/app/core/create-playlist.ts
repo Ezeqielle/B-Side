@@ -5,7 +5,7 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmDialogImports } from '@spartan-ng/helm/dialog';
 import { HlmInputImports } from '@spartan-ng/helm/input';
 import { HlmLabelImports } from '@spartan-ng/helm/label';
-import { PlaylistsApi } from '../../core/playlists-api';
+import { PlaylistsApi } from './playlists-api';
 
 /** Playlist créée sur Spotify. */
 export interface CreatedPlaylist {
@@ -88,4 +88,30 @@ export class CreatePlaylist {
       },
     });
   }
+}
+
+/** Résultat de `CreatePlaylist` : lien vers la playlist créée, ou l'échec. Rien tant qu'`undefined`. */
+@Component({
+  selector: 'app-playlist-created',
+  template: `
+    @if (playlist(); as playlist) {
+      <p class="text-sm" role="status">
+        Playlist « {{ playlist.name }} » créée.
+        <a
+          class="underline underline-offset-4"
+          target="_blank"
+          rel="noopener"
+          [href]="'https://open.spotify.com/playlist/' + playlist.id"
+          >Ouvrir dans Spotify</a
+        >
+      </p>
+    } @else if (playlist() === null) {
+      <p class="text-destructive text-sm" role="alert">
+        La création de la playlist s'est interrompue.
+      </p>
+    }
+  `,
+})
+export class PlaylistCreated {
+  readonly playlist = input.required<CreatedPlaylist | null | undefined>();
 }

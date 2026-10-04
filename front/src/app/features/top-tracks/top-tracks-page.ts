@@ -5,11 +5,12 @@ import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { apiResource } from '../../core/api-resource';
+import { CreatePlaylist, CreatedPlaylist, PlaylistCreated } from '../../core/create-playlist';
 import { TimeRange, Track } from '../../core/models';
+import { paged } from '../../core/paged';
 import { StatsApi } from '../../core/stats-api';
 import { trackArtwork } from '../../core/track-preview';
 import { TrackStats } from '../stats/track-stats-dialog';
-import { CreatePlaylist, CreatedPlaylist } from './create-playlist';
 import { CardTrack, TrackCard } from './track-card';
 
 /** Spotify ne remonte pas au-delà d'un an : le top « depuis toujours » vient de l'historique importé. */
@@ -25,6 +26,7 @@ const LIMIT = 50;
     HlmTabsImports,
     HlmSkeletonImports,
     CreatePlaylist,
+    PlaylistCreated,
     TrackCard,
   ],
   template: `
@@ -47,7 +49,7 @@ const LIMIT = 50;
             }
           </hlm-tabs-list>
         </hlm-tabs>
-        @if (tracks().length) {
+        @if (top.items().length) {
           <app-create-playlist
             [trackIds]="trackIds()"
             [defaultName]="playlistName()"
@@ -57,28 +59,15 @@ const LIMIT = 50;
       </div>
     </div>
 
-    @if (created(); as playlist) {
-      <p class="mb-6 text-sm" role="status">
-        Playlist « {{ playlist.name }} » créée.
-        <a
-          class="underline underline-offset-4"
-          target="_blank"
-          rel="noopener"
-          [href]="'https://open.spotify.com/playlist/' + playlist.id"
-          >Ouvrir dans Spotify</a
-        >
-      </p>
-    } @else if (created() === null) {
-      <p class="text-destructive mb-6 text-sm" role="alert">
-        La création de la playlist s'est interrompue.
-      </p>
+    @if (created() !== undefined) {
+      <app-playlist-created class="mb-6 block" [playlist]="created()" />
     }
 
-    @if (error() && !tracks().length) {
+    @if (top.error() && !top.items().length) {
       <p class="text-destructive" role="alert">Impossible de récupérer tes tops pour le moment.</p>
     } @else {
       <div class="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
-        @if (loading() && !tracks().length) {
+        @if (top.isLoading() && !top.items().length) {
           @for (i of placeholders; track i) {
             <div>
               <div hlmSkeleton class="aspect-square w-full rounded-lg"></div>
@@ -87,7 +76,7 @@ const LIMIT = 50;
             </div>
           }
         } @else {
-          @for (track of tracks(); track track.id; let i = $index) {
+          @for (track of top.items(); track track.id; let i = $index) {
             <app-track-card [track]="track" [rank]="i + 1" (opened)="openStats(track)" />
           } @empty {
             <p class="text-muted-foreground col-span-full">
@@ -104,13 +93,13 @@ const LIMIT = 50;
           }
         }
       </div>
-      @if (hasMore()) {
+      @if (top.hasMore()) {
         <div class="mt-8 flex flex-col items-center gap-2">
-          @if (error()) {
+          @if (top.error()) {
             <p class="text-destructive text-sm" role="alert">Impossible de charger la suite.</p>
           }
-          <button hlmBtn variant="outline" [disabled]="loading()" (click)="loadMore()">
-            {{ loading() ? 'Chargement…' : 'Charger plus' }}
+          <button hlmBtn variant="outline" [disabled]="top.loadingMore()" (click)="top.more()">
+            {{ top.loadingMore() ? 'Chargement…' : 'Charger plus' }}
           </button>
         </div>
       }
@@ -128,59 +117,44 @@ export class TopTracksPage {
 
   protected readonly range = signal<Range>('short_term');
   protected readonly allTime = computed(() => this.range() === 'all_time');
-  /** Rang du premier titre de la dernière page demandée, remis à 0 à chaque changement de période. */
-  private readonly offset = linkedSignal({ source: this.range, computation: () => 0 });
 
-  private readonly spotify = apiResource<Track[]>(() => {
-    const range = this.range();
-    return range === 'all_time'
-      ? undefined
-      : { url: '/api/me/top/tracks', params: { range, limit: LIMIT, offset: this.offset() } };
-  });
+  private readonly stats = inject(StatsApi);
 
-  private readonly history = inject(StatsApi).tracks(
-    computed(() => (this.allTime() ? {} : undefined)),
-    LIMIT,
-    this.offset,
-  );
-
-  private readonly source = computed(() => (this.allTime() ? this.history : this.spotify));
-  protected readonly loading = computed(() => this.source().isLoading());
-  protected readonly error = computed(() => this.source().error());
-
-  /** Dernière page demandée, une fois chargée. */
-  private readonly page = computed((): CardTrack[] | undefined => {
-    if (this.loading()) {
-      return undefined;
-    }
-    return this.allTime()
-      ? this.history.value()?.map((track) => ({
-          id: track.id,
-          name: track.name,
-          artists: [track.artistName],
-          album: track.albumName,
-          imageUrl: trackArtwork(track),
-        }))
-      : this.spotify.value();
-  });
-
-  /** Pages chargées pour la période, dans l'ordre. */
-  private readonly pages = linkedSignal<
-    { offset: number; page: CardTrack[] | undefined },
-    CardTrack[][]
-  >({
-    source: () => ({ offset: this.offset(), page: this.page() }),
-    computation: ({ offset, page }, previous) => {
-      const pages = offset === 0 ? [] : [...(previous?.value ?? [])];
-      if (page) {
-        pages[offset / LIMIT] = page;
-      }
-      return pages;
+  protected readonly top = paged<CardTrack>({
+    reset: this.range,
+    first: LIMIT,
+    load: (page) => {
+      const spotify = apiResource<Track[]>(() => {
+        const range = this.range();
+        return range === 'all_time'
+          ? undefined
+          : { url: '/api/me/top/tracks', params: { range, ...page() } };
+      });
+      const history = this.stats.tracks(
+        computed(() => (this.allTime() ? {} : undefined)),
+        page,
+      );
+      const source = computed(() => (this.allTime() ? history : spotify));
+      return {
+        value: computed(() =>
+          this.allTime()
+            ? history.value()?.map((track) => ({
+                id: track.id,
+                name: track.name,
+                artists: [track.artistName],
+                album: track.albumName,
+                imageUrl: trackArtwork(track),
+              }))
+            : spotify.value(),
+        ),
+        isLoading: computed(() => source().isLoading()),
+        error: computed(() => source().error()),
+        reload: () => source().reload(),
+      };
     },
   });
 
-  protected readonly tracks = computed(() => this.pages().flat());
-  protected readonly trackIds = computed(() => this.tracks().map((track) => track.id));
+  protected readonly trackIds = computed(() => this.top.items().map((track) => track.id));
 
   private readonly locale = inject(LOCALE_ID);
   /** Nom proposé : « Top 4 semaines · 3 oct. 2026 ». */
@@ -193,8 +167,6 @@ export class TopTracksPage {
     source: this.range,
     computation: () => undefined,
   });
-  /** Une page incomplète est la dernière. */
-  protected readonly hasMore = computed(() => this.pages().at(-1)?.length === LIMIT);
 
   private readonly trackStats = inject(TrackStats);
 
@@ -205,13 +177,5 @@ export class TopTracksPage {
       artist: track.artists.join(', '),
       imageUrl: track.imageUrl,
     });
-  }
-
-  protected loadMore(): void {
-    if (this.error()) {
-      this.source().reload();
-    } else {
-      this.offset.update((offset) => offset + LIMIT);
-    }
   }
 }

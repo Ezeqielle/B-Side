@@ -9,6 +9,7 @@ import {
   StatsOverview,
   TrackStat,
 } from './models';
+import { Page } from './paged';
 
 /**
  * Stats de l'historique importé, pour le filtre courant. Pendant un changement de filtre,
@@ -24,9 +25,9 @@ export class StatsApi {
     return stats<MonthStat[]>('timeline', filter);
   }
 
-  /** `offset` : rang du premier titre, pour charger la suite du classement. */
-  tracks(filter: Signal<PlayFilter | undefined>, limit: number, offset?: Signal<number>) {
-    return stats<TrackStat[]>('tracks', filter, () => ({ limit, offset: offset?.() }));
+  /** `page` : tranche du classement, pour le charger par pages. */
+  tracks(filter: Signal<PlayFilter | undefined>, page: Signal<Page>) {
+    return stats<TrackStat[]>('tracks', filter, () => ({ ...page() }));
   }
 
   artists(filter: Signal<PlayFilter>, limit: number) {

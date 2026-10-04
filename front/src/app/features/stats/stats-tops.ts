@@ -1,31 +1,66 @@
-import { Component, computed, inject } from '@angular/core';
+import { formatDate } from '@angular/common';
+import { Component, LOCALE_ID, computed, inject, linkedSignal } from '@angular/core';
+import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
+import { CreatePlaylist, CreatedPlaylist, PlaylistCreated } from '../../core/create-playlist';
+import { PlayFilter, TrackStat } from '../../core/models';
+import { paged } from '../../core/paged';
 import { StatsApi } from '../../core/stats-api';
 import { trackArtwork } from '../../core/track-preview';
 import { Ranking, RankingEntry } from './ranking';
 import { StatsFilter } from './stats-filter';
 
 const LIMIT = 20;
+/** Titres ajoutés par « Charger plus ». */
+const STEP = 10;
 
 /** Titres et artistes les plus écoutés pour le filtre courant. Charge ses propres données. */
 @Component({
   selector: 'app-stats-tops',
-  imports: [HlmCardImports, Ranking],
+  imports: [HlmButtonImports, HlmCardImports, CreatePlaylist, PlaylistCreated, Ranking],
   template: `
     <div
-      class="grid gap-6 transition-opacity"
+      class="grid items-start gap-6 transition-opacity"
       [class]="filter.artist() ? '' : 'lg:grid-cols-2'"
       [class.opacity-60]="loading()"
     >
       <section hlmCard>
         <div hlmCardHeader>
           <h2 hlmCardTitle>Titres les plus écoutés</h2>
+          @if (trackIds().length) {
+            <div hlmCardAction>
+              <app-create-playlist
+                [trackIds]="trackIds()"
+                [defaultName]="playlistName()"
+                (done)="created.set($event)"
+              />
+            </div>
+          }
         </div>
         <div hlmCardContent>
+          @if (created() !== undefined) {
+            <app-playlist-created class="mb-6 block" [playlist]="created()" />
+          }
           <app-ranking
             [entries]="trackEntries()"
             empty="Aucun titre écouté plus de 30 secondes sur cette période."
           />
+          @if (tracks.hasMore()) {
+            <div class="mt-6 flex flex-col items-center gap-2">
+              @if (tracks.error()) {
+                <p class="text-destructive text-sm" role="alert">Impossible de charger la suite.</p>
+              }
+              <button
+                hlmBtn
+                variant="outline"
+                size="sm"
+                [disabled]="tracks.loadingMore()"
+                (click)="tracks.more()"
+              >
+                {{ tracks.loadingMore() ? 'Chargement…' : 'Charger plus' }}
+              </button>
+            </div>
+          }
         </div>
       </section>
       @if (!filter.artist()) {
@@ -50,13 +85,19 @@ export class StatsTops {
   protected readonly filter = inject(StatsFilter);
   private readonly api = inject(StatsApi);
 
-  private readonly tracks = this.api.tracks(this.filter.filter, LIMIT);
+  protected readonly tracks = paged<TrackStat>({
+    reset: this.filter.filter,
+    first: LIMIT,
+    step: STEP,
+    keepPrevious: true,
+    load: (page) => this.api.tracks(this.filter.filter, page),
+  });
   private readonly artists = this.api.artists(this.filter.filter, LIMIT);
 
   protected readonly loading = computed(() => this.tracks.isLoading() || this.artists.isLoading());
 
   protected readonly trackEntries = computed(() =>
-    (this.tracks.value() ?? []).map((track): RankingEntry => ({
+    this.tracks.items().map((track): RankingEntry => ({
       key: track.id,
       name: track.name,
       artist: track.artistName,
@@ -76,4 +117,18 @@ export class StatsTops {
       plays: artist.plays,
     })),
   );
+
+  protected readonly trackIds = computed(() => this.tracks.items().map((track) => track.id));
+
+  private readonly locale = inject(LOCALE_ID);
+  /** Nom proposé : « Top Daft Punk 2021 · 3 oct. 2026 ». */
+  protected readonly playlistName = computed(() => {
+    const scope = [this.filter.artist(), this.filter.year() ?? 'depuis toujours'].filter(Boolean);
+    return `Top ${scope.join(' ')} · ${formatDate(Date.now(), 'd MMM y', this.locale)}`;
+  });
+  /** Dernière playlist créée, `null` si la création a échoué. Oubliée au changement de filtre. */
+  protected readonly created = linkedSignal<PlayFilter, CreatedPlaylist | null | undefined>({
+    source: this.filter.filter,
+    computation: () => undefined,
+  });
 }

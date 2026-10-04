@@ -19,6 +19,8 @@ export interface Paged<T> {
   readonly hasMore: Signal<boolean>;
   /** Charge la page suivante, ou réessaie celle qui a échoué. */
   more(): void;
+  /** Repart de la première page, relue depuis l'API. */
+  reload(): void;
 }
 
 /**
@@ -68,6 +70,13 @@ export function paged<T>(options: {
         source.reload();
       } else {
         offset.set(page().offset + page().limit);
+      }
+    },
+    reload: () => {
+      if (offset()) {
+        offset.set(0);
+      } else {
+        source.reload();
       }
     },
   };

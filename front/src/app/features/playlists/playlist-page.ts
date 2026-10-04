@@ -86,6 +86,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
           <div class="flex gap-1">
             <a hlmBtn size="xs" variant="ghost" [routerLink]="['/playlists', id(), 'doublons']">Doublons</a>
             <a hlmBtn size="xs" variant="ghost" [routerLink]="['/playlists', id(), 'a-garder']">Titres à garder</a>
+            <a hlmBtn size="xs" variant="ghost" routerLink="/playlists/passes">Titres passés</a>
             @if (rules()) {
               <button hlmBtn size="xs" variant="ghost" (click)="rules.set(null)">Fermer le nettoyage</button>
             } @else {

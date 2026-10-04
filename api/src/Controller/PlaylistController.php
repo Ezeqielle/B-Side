@@ -11,6 +11,7 @@ use App\Playlist\KeptTracks;
 use App\Playlist\PlaylistCleanup;
 use App\Playlist\PlaylistCreation;
 use App\Playlist\PlaylistStats;
+use App\Playlist\SkipFilter;
 use App\Repository\PlaylistRepository;
 use App\Stats\PlayFilter;
 use App\Stats\PlayStats;
@@ -33,6 +34,7 @@ use Symfony\Component\Security\Http\Attribute\CurrentUser;
 class PlaylistController extends AbstractController
 {
     private const array LIMIT = ['min_range' => 1, 'max_range' => 100];
+    private const array OFFSET = ['min_range' => 0];
 
     public function __construct(
         private readonly PlaylistStats $stats,
@@ -91,6 +93,20 @@ class PlaylistController extends AbstractController
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
     ): JsonResponse {
         return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit], static fn () => $playStats->topTracksOutsidePlaylists($user, $filter, $limit)));
+    }
+
+    /**
+     * Morceaux passés selon les seuils de SkipFilter, du dernier passé au plus ancien, avec les positions de leurs
+     * versions dans chaque playlist.
+     */
+    #[Route('/skipped', name: '_skipped', methods: ['GET'])]
+    public function skipped(
+        #[CurrentUser] User $user,
+        #[MapQueryString] SkipFilter $filter = new SkipFilter(),
+        #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
+        #[MapQueryParameter(options: self::OFFSET)] int $offset = 0,
+    ): JsonResponse {
+        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit, $offset], fn () => $this->stats->skippedSongs($user, $filter, $limit, $offset)));
     }
 
     #[Route('/{id}', name: '_show', methods: ['GET'])]

@@ -178,6 +178,45 @@ class PlaylistControllerTest extends WebTestCase
         self::assertSame([2, 2], [$songA['plays'], $songA['starts']]);
     }
 
+    public function testSkippedSongs(): void
+    {
+        $this->import([
+            $this->play(self::SONG_A, 'Song A', 'Artist A', '2022-06-01T10:00:00Z', 5000, true),
+            $this->play(self::SONG_A, 'Song A', 'Artist A', '2022-06-02T10:00:00Z', 5000, true),
+            // Passé en dernier, mais dans aucune playlist
+            $this->play('0000000000000000000004', 'Song D', 'Artist D', '2022-07-01T10:00:00Z', 5000, true),
+        ]);
+        $this->sync();
+
+        [$songA, $songB] = $this->get('/api/playlists/skipped');
+        self::assertSame([self::SONG_A, 'Song A', 2, 4], [$songA['id'], $songA['name'], $songA['skips'], $songA['starts']]);
+        self::assertEquals(new \DateTimeImmutable('2022-06-02T10:00:00Z'), new \DateTimeImmutable($songA['skippedAt']));
+        self::assertSame([
+            ['id' => 'mix', 'name' => 'Mix', 'positions' => [0]],
+            ['id' => 'liked', 'name' => 'Titres likés', 'positions' => [0]],
+        ], $songA['playlists'], 'Toutes versions confondues, likes compris');
+        self::assertSame([self::SONG_B, 1, 1], [$songB['id'], $songB['skips'], $songB['starts']]);
+        self::assertSame([['id' => 'road-trip', 'name' => 'Road trip', 'positions' => [0]]], $songB['playlists']);
+
+        self::assertSame([self::SONG_B], array_column($this->get('/api/playlists/skipped?offset=1'), 'id'));
+
+        // Seuils cumulables : Song A passé 2 fois sur 4 (50 %), Song B 1 fois sur 1 (100 %)
+        $skipped = fn (string $query): array => array_column($this->get('/api/playlists/skipped?' . $query), 'id');
+        self::assertSame([self::SONG_A], $skipped('minSkips=2'));
+        self::assertSame([self::SONG_B], $skipped('minRate=60'));
+        self::assertSame([self::SONG_A, self::SONG_B], $skipped('minRate=50'));
+        self::assertSame([], $skipped('minSkips=2&minRate=60'));
+
+        foreach (['minSkips=0', 'minRate=101'] as $query) {
+            $this->client->request('GET', '/api/playlists/skipped?' . $query);
+            self::assertResponseStatusCodeSame(404, $query);
+        }
+
+        // Retiré de sa seule playlist, il quitte la liste
+        $this->post('/api/playlists/road-trip/remove', ['positions' => [0]]);
+        self::assertSame([self::SONG_A], array_column($this->get('/api/playlists/skipped'), 'id'));
+    }
+
     public function testStatsFollowThePeriod(): void
     {
         $this->sync();

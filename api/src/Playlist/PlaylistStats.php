@@ -164,6 +164,80 @@ final readonly class PlaylistStats
     }
 
     /**
+     * Morceaux passés selon les seuils du filtre et rangés dans une playlist ou likés, du dernier passé au plus ancien,
+     * depuis toujours, avec les playlists qui les contiennent.
+     *
+     * @return list<SkippedSong>
+     */
+    public function skippedSongs(User $user, SkipFilter $filter, int $limit, int $offset): array
+    {
+        $skipped = $this->listening->plays($user, new PlayFilter())
+            ->select(
+                'lower(t.name) AS name',
+                'lower(t.artist_name) AS artist',
+                '(array_agg(t.id ORDER BY p.played_at DESC) FILTER (WHERE p.skipped))[1] AS id',
+                '(array_agg(t.image_url ORDER BY p.played_at DESC) FILTER (WHERE t.image_url IS NOT NULL))[1] AS image_url',
+                'MAX(p.played_at) FILTER (WHERE p.skipped) AS skipped_at',
+                'COUNT(*) FILTER (WHERE p.skipped) AS skips',
+                'COUNT(*) AS starts',
+            )
+            ->andWhere('(' . Listening::song('t') . ') IN (
+                SELECT ' . Listening::song('pt_t') . '
+                FROM playlist pl
+                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
+                INNER JOIN track pt_t ON pt_t.id = pt.track_id
+                WHERE pl.user_id = p.user_id AND pl.readable
+            )')
+            ->groupBy('1', '2')
+            ->having('COUNT(*) FILTER (WHERE p.skipped) >= :min_skips')
+            ->setParameter('min_skips', $filter->minSkips ?? 1)
+            ->orderBy('skipped_at', 'DESC')
+            ->addOrderBy('1')
+            ->addOrderBy('2')
+            ->setMaxResults($limit)
+            ->setFirstResult($offset);
+
+        if (null !== $filter->minRate) {
+            $skipped->andHaving('COUNT(*) FILTER (WHERE p.skipped) * 100 >= :min_rate * COUNT(*)')
+                ->setParameter('min_rate', $filter->minRate);
+        }
+
+        /** @var list<array{id: string, name: string, artist_name: string, image_url: ?string, skipped_at: string, skips: int, starts: int, playlists: string}> $rows */
+        $rows = $this->connection->fetchAllAssociative('
+            WITH skipped AS (' . $skipped->getSQL() . '),
+            copies AS (
+                SELECT lower(t.name) AS name, lower(t.artist_name) AS artist, pl.spotify_id AS id, pl.name AS playlist_name,
+                    array_agg(pt.position ORDER BY pt.position) AS positions
+                FROM playlist pl
+                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
+                INNER JOIN track t ON t.id = pt.track_id
+                WHERE pl.user_id = :user AND pl.readable AND (' . Listening::song('t') . ') IN (SELECT name, artist FROM skipped)
+                GROUP BY 1, 2, pl.id
+            )
+            SELECT s.id, t.name, t.artist_name, s.image_url, s.skipped_at, s.skips, s.starts,
+                COALESCE((
+                    SELECT json_agg(json_build_object(\'id\', c.id, \'name\', c.playlist_name, \'positions\', c.positions) ORDER BY lower(c.playlist_name))
+                    FROM copies c
+                    WHERE (c.name, c.artist) = (s.name, s.artist)
+                ), \'[]\') AS playlists
+            FROM skipped s
+            INNER JOIN track t ON t.id = s.id
+            ORDER BY s.skipped_at DESC, s.name, s.artist
+            ', $skipped->getParameters());
+
+        return array_map(static fn (array $row): SkippedSong => new SkippedSong(
+            id: $row['id'],
+            name: $row['name'],
+            artistName: $row['artist_name'],
+            imageUrl: $row['image_url'],
+            skippedAt: new \DateTimeImmutable($row['skipped_at']),
+            skips: $row['skips'],
+            starts: $row['starts'],
+            playlists: json_decode($row['playlists'], true, flags: \JSON_THROW_ON_ERROR),
+        ), $rows);
+    }
+
+    /**
      * @return list<PlaylistStat>
      */
     private function findPlaylists(User $user, PlayFilter $filter, ?string $id = null): array

@@ -154,6 +154,27 @@ export interface KeptTrack {
   keptAt: string;
 }
 
+/** Seuils des morceaux passés, cumulables, `null` si désactivé. `minRate` : part des écoutes passées, en %. */
+export interface SkipFilter {
+  minSkips: number | null;
+  minRate: number | null;
+}
+
+/**
+ * Morceau passé au moins une fois, toutes versions confondues. `id` : le titre passé en dernier,
+ * `starts` : toutes ses écoutes. `playlists` : celles qui le contiennent, likes compris, avec ses positions.
+ */
+export interface SkippedSong {
+  id: string;
+  name: string;
+  artistName: string;
+  imageUrl: string | null;
+  skippedAt: string;
+  skips: number;
+  starts: number;
+  playlists: { id: string; name: string; positions: number[] }[];
+}
+
 /**
  * Version d'un morceau dans une playlist : single, album, edit… `recording` est la position du premier
  * titre du même enregistrement, égale pour deux versions identiques.

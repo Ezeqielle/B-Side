@@ -48,6 +48,7 @@ import { SincePipe } from './since';
             Synchronisé {{ date | since }}
           }
         </p>
+        <a hlmBtn variant="ghost" size="sm" routerLink="/playlists/passes">Titres passés</a>
         <button hlmBtn variant="outline" size="sm" [disabled]="syncing()" (click)="sync()">
           Synchroniser
         </button>

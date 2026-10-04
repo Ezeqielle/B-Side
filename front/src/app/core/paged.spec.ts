@@ -9,6 +9,7 @@ function setup(options: { keepPrevious?: boolean } = {}) {
   const value = signal<number[] | undefined>(undefined);
   const isLoading = signal(true);
   let requested: () => Page = () => ({ offset: -1, limit: -1 });
+  let reloads = 0;
   const list = paged<number>({
     reset,
     first: 3,
@@ -16,7 +17,7 @@ function setup(options: { keepPrevious?: boolean } = {}) {
     ...options,
     load: (page): ApiResource<number[]> => {
       requested = page;
-      return { value, isLoading, error: signal(undefined), reload: () => undefined };
+      return { value, isLoading, error: signal(undefined), reload: () => reloads++ };
     },
   });
   const respond = (items: number[]) => {
@@ -31,7 +32,7 @@ function setup(options: { keepPrevious?: boolean } = {}) {
     reset.set(key);
     isLoading.set(true);
   };
-  return { list, respond, more, restart, page: () => requested() };
+  return { list, respond, more, restart, page: () => requested(), reloads: () => reloads };
 }
 
 describe('paged', () => {
@@ -80,5 +81,18 @@ describe('paged', () => {
     respond([7]);
     expect(list.items()).toEqual([7]);
     expect(list.hasMore()).toBe(false);
+  });
+
+  it('relit la première page avec `reload`', () => {
+    const { list, respond, more, page, reloads } = setup();
+    respond([1, 2, 3]);
+    list.reload();
+    expect(reloads()).toBe(1);
+
+    more();
+    respond([4, 5]);
+    list.reload();
+    expect(page()).toEqual({ offset: 0, limit: 3 });
+    expect(reloads()).toBe(1);
   });
 });

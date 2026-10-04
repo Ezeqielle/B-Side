@@ -1,5 +1,5 @@
 import { HttpClient } from '@angular/common/http';
-import { Service, inject } from '@angular/core';
+import { Service, Signal, inject } from '@angular/core';
 import { Observable, concatMap, finalize, first, map, switchMap, take, timer } from 'rxjs';
 import { ApiCache, ApiParams, TIMEZONE, apiResource } from './api-resource';
 import {
@@ -8,9 +8,12 @@ import {
   PlaylistOverview,
   PlaylistStat,
   PlaylistTrackStat,
+  SkipFilter,
+  SkippedSong,
   SongVersion,
   TrackStat,
 } from './models';
+import { Page } from './paged';
 
 /** Attente entre deux vérifications de la fin d'une synchro, et nombre maximum de vérifications (3 min). */
 export const SYNC_POLL_MS = 2000;
@@ -68,6 +71,11 @@ export class PlaylistsApi {
     return playlists<TrackStat[]>('/missing', { limit });
   }
 
+  /** Morceaux passés selon les seuils du filtre, du dernier passé au plus ancien. */
+  skipped(filter: Signal<SkipFilter>, page: Signal<Page>) {
+    return playlists<SkippedSong[]>('/skipped', () => ({ ...filter(), ...page() }));
+  }
+
   /**
    * Retire des titres, par position : ils vont dans la corbeille Spotify et dans le journal.
    * Les stats changent : le cache est vidé.
@@ -106,9 +114,9 @@ export class PlaylistsApi {
   }
 }
 
-function playlists<T>(path: string | (() => string), params: ApiParams = {}) {
+function playlists<T>(path: string | (() => string), params: ApiParams | (() => ApiParams) = {}) {
   return apiResource<T>(() => ({
     url: `/api/playlists${typeof path === 'string' ? path : path()}`,
-    params: { ...params, tz: TIMEZONE },
+    params: { ...(typeof params === 'function' ? params() : params), tz: TIMEZONE },
   }));
 }

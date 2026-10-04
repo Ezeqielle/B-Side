@@ -28,6 +28,11 @@ export const routes: Routes = [
           import('./features/playlists/playlists-page').then((m) => m.PlaylistsPage),
       },
       {
+        path: 'playlists/passes',
+        loadComponent: () =>
+          import('./features/playlists/skipped-page').then((m) => m.SkippedPage),
+      },
+      {
         path: 'playlists/:id',
         loadComponent: () =>
           import('./features/playlists/playlist-page').then((m) => m.PlaylistPage),

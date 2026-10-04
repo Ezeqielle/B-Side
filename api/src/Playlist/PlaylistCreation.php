@@ -30,7 +30,7 @@ class PlaylistCreation
     public function create(User $user, string $name, array $trackIds): string
     {
         $id = $this->spotify->createPlaylist($user, $name, self::DESCRIPTION);
-        $this->spotify->addToPlaylist($user, $id, $trackIds);
+        $this->spotify->addTracks($user, $id, $trackIds);
 
         $userId = $user->getId() ?? throw new \LogicException('User not persisted.');
         $this->statsCache->clear($userId);

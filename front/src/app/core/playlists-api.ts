@@ -11,8 +11,15 @@ import {
   SkipFilter,
   SkippedSong,
   SongVersion,
+  TrackPosition,
   TrackStat,
 } from './models';
+
+/** `skipped` : titres qui n'étaient plus à la position vue, laissés en place. */
+export interface RemovalResult {
+  removed: number;
+  skipped: number;
+}
 import { Page } from './paged';
 
 /** Attente entre deux vérifications de la fin d'une synchro, et nombre maximum de vérifications (3 min). */
@@ -77,12 +84,12 @@ export class PlaylistsApi {
   }
 
   /**
-   * Retire des titres, par position : ils vont dans la corbeille Spotify et dans le journal.
-   * Les stats changent : le cache est vidé.
+   * Retire des titres d'une ou plusieurs playlists (`playlistId` : id Spotify, ou `LIKED_PLAYLIST_ID`) :
+   * ils vont dans la corbeille Spotify et dans le journal. Les stats changent : le cache est vidé.
    */
-  remove(id: string, positions: number[]): Observable<{ removed: number }> {
+  remove(targets: { playlistId: string; tracks: TrackPosition[] }[]): Observable<RemovalResult> {
     return this.http
-      .post<{ removed: number }>(`/api/playlists/${encodeURIComponent(id)}/remove`, { positions })
+      .post<RemovalResult>('/api/playlists/remove', { targets })
       .pipe(finalize(() => this.cache.clear()));
   }
 

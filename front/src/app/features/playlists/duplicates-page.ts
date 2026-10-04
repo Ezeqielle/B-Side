@@ -205,12 +205,12 @@ export class DuplicatesPage {
       const kept = this.keptOf(group);
       return group
         .filter((version) => this.isRemoved(version, kept))
-        .map((version) => version.track.position);
+        .map(({ track: { position, id } }) => ({ position, id }));
     }),
   );
 
   protected readonly removal = removal({
-    targets: () => [{ id: this.id(), name: this.playlist.value()?.name ?? '', positions: this.selected() }],
+    targets: () => [{ id: this.id(), name: this.playlist.value()?.name ?? '', tracks: this.selected() }],
     sources: [this.playlist, this.versions],
   });
 

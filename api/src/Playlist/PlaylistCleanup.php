@@ -16,7 +16,7 @@ use Psr\Clock\ClockInterface;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Retire des titres d'une playlist ou des likes sans rien perdre : ils passent d'abord dans une playlist corbeille
+ * Retire des titres des playlists ou des likes sans rien perdre : ils passent d'abord dans une playlist corbeille
  * sur Spotify, et chaque retrait est noté (Removal) pour pouvoir être annulé.
  *
  * Le contenu en base est mis à jour tout de suite, puis une synchro réaligne positions et versions.
@@ -29,7 +29,7 @@ class PlaylistCleanup
      * Titres traités et notés ensemble : la limite des likes, la plus basse de Spotify.
      * Après une erreur, chaque lot déjà retiré figure dans le journal.
      */
-    private const int BATCH = 40;
+    private const int BATCH = SpotifyApi::LIBRARY_BATCH;
 
     public function __construct(
         private readonly SpotifyApi $spotify,
@@ -43,17 +43,20 @@ class PlaylistCleanup
     }
 
     /**
-     * @param list<int> $positions titres à retirer ; les autres occurrences d'un même titre restent en place
+     * Retire des titres d'une ou plusieurs playlists, puis lance une seule synchro. Un titre n'est retiré que s'il est
+     * encore à la position vue : une synchro a pu renuméroter la playlist entre-temps.
      *
-     * @return int nombre de titres retirés
+     * @param array<string, array<int, string>> $targets par playlist (id Spotify, ou `Playlist::LIKED`), l'id Spotify
+     *                                                   de chaque titre à retirer, par position ; les autres
+     *                                                   occurrences d'un même titre restent en place
      */
-    public function remove(Playlist $playlist, array $positions): int
+    public function remove(User $user, array $targets): RemovalResult
     {
-        $user = $playlist->getUser();
-        $tracks = $this->playlistRepository->findTracks($playlist);
-        $removed = array_intersect_key($tracks, array_flip($positions));
-        if ([] === $removed) {
-            return 0;
+        $plan = $this->findTargets($user, $targets);
+        $requested = array_sum(array_map(\count(...), $targets));
+        $removed = array_sum(array_map(static fn (array $target): int => \count($target[2]), $plan));
+        if (0 === $removed) {
+            return new RemovalResult(0, $requested);
         }
 
         $trash = $user->getTrashPlaylistId() ?? $this->createTrash($user);
@@ -61,38 +64,35 @@ class PlaylistCleanup
         $now = $this->clock->now();
 
         try {
-            foreach (array_chunk($removed, self::BATCH) as $batch) {
-                $ids = self::trackIds($batch);
-                $this->spotify->addToPlaylist($user, $trash, array_values(array_diff($ids, array_keys($trashed))));
-                $trashed += array_flip($ids);
+            foreach ($plan as [$playlist, $content, $matching]) {
+                foreach (array_chunk($matching, self::BATCH) as $batch) {
+                    $ids = self::trackIds($batch);
+                    $this->spotify->addTracks($user, $trash, array_values(array_diff($ids, array_keys($trashed))));
+                    $trashed += array_flip($ids);
+                    $this->spotify->removeTracks($user, $playlist->getSpotifyId(), $ids);
 
-                if (Playlist::LIKED === $playlist->getSpotifyId()) {
-                    $this->spotify->removeSavedTracks($user, $ids);
-                } else {
-                    $this->spotify->removeFromPlaylist($user, $playlist->getSpotifyId(), $ids);
+                    foreach ($batch as $track) {
+                        $this->entityManager->persist(new Removal(
+                            $user,
+                            $track->getTrack(),
+                            $playlist->getSpotifyId(),
+                            $playlist->getName(),
+                            $track->getPosition(),
+                            $track->getAddedAt(),
+                            $now,
+                        ));
+                        $this->entityManager->remove($track);
+                    }
+                    $this->entityManager->flush();
                 }
 
-                foreach ($batch as $track) {
-                    $this->entityManager->persist(new Removal(
-                        $user,
-                        $track->getTrack(),
-                        $playlist->getSpotifyId(),
-                        $playlist->getName(),
-                        $track->getPosition(),
-                        $track->getAddedAt(),
-                        $now,
-                    ));
-                    $this->entityManager->remove($track);
-                }
-                $this->entityManager->flush();
+                $this->putBackKeptCopies($playlist, $content, $matching);
             }
-
-            $this->putBackKeptCopies($playlist, $tracks, $removed);
         } finally {
             $this->resync($user);
         }
 
-        return \count($removed);
+        return new RemovalResult($removed, $requested - $removed);
     }
 
     /**
@@ -123,11 +123,7 @@ class PlaylistCleanup
         try {
             foreach ($byPlaylist as $playlistId => $batch) {
                 $trackIds = array_values(array_unique(array_map(static fn (Removal $removal): string => $removal->getTrack()->getId(), $batch)));
-                if (Playlist::LIKED === (string) $playlistId) {
-                    $this->spotify->saveTracks($user, $trackIds);
-                } else {
-                    $this->spotify->addToPlaylist($user, (string) $playlistId, $trackIds);
-                }
+                $this->spotify->addTracks($user, (string) $playlistId, $trackIds);
 
                 foreach ($batch as $removal) {
                     $removal->markRestored($now);
@@ -138,7 +134,7 @@ class PlaylistCleanup
             $trash = $user->getTrashPlaylistId();
             if (null !== $trash) {
                 $restored = array_map(static fn (Removal $removal): string => $removal->getTrack()->getId(), $removals);
-                $this->spotify->removeFromPlaylist($user, $trash, array_values(array_diff(
+                $this->spotify->removeTracks($user, $trash, array_values(array_diff(
                     array_unique($restored),
                     $this->removalRepository->findTrashedTrackIds($user),
                 )));
@@ -148,6 +144,36 @@ class PlaylistCleanup
         }
 
         return \count($removals);
+    }
+
+    /**
+     * Playlists lisibles visées, leur contenu, et les titres encore à la position vue.
+     *
+     * @param array<string, array<int, string>> $targets
+     *
+     * @return list<array{Playlist, array<int, PlaylistTrack>, non-empty-array<int, PlaylistTrack>}>
+     */
+    private function findTargets(User $user, array $targets): array
+    {
+        $playlists = $this->playlistRepository->findByUserIndexed($user);
+        $found = [];
+        foreach ($targets as $playlistId => $tracks) {
+            $playlist = $playlists[$playlistId] ?? null;
+            if (null === $playlist || !$playlist->isReadable()) {
+                continue;
+            }
+            $content = $this->playlistRepository->findTracks($playlist);
+            $matching = array_filter(
+                $content,
+                static fn (PlaylistTrack $track, int $position): bool => ($tracks[$position] ?? null) === $track->getTrack()->getId(),
+                \ARRAY_FILTER_USE_BOTH,
+            );
+            if ([] !== $matching) {
+                $found[] = [$playlist, $content, $matching];
+            }
+        }
+
+        return $found;
     }
 
     private function createTrash(User $user): string
@@ -175,7 +201,7 @@ class PlaylistCleanup
                 continue;
             }
             if (isset($removedIds[$track->getTrack()->getId()])) {
-                $this->spotify->addToPlaylist($playlist->getUser(), $playlist->getSpotifyId(), [$track->getTrack()->getId()], $index);
+                $this->spotify->addTracks($playlist->getUser(), $playlist->getSpotifyId(), [$track->getTrack()->getId()], $index);
             }
             $index++;
         }

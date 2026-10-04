@@ -270,7 +270,7 @@ export class PlaylistPage {
       {
         id: this.id(),
         name: this.playlist.value()?.name ?? '',
-        positions: this.selected().map((track) => track.position),
+        tracks: this.selected().map(({ position, id }) => ({ position, id })),
       },
     ],
     sources: [this.playlist, this.tracks],

@@ -164,6 +164,12 @@ export interface SkipFilter {
  * Morceau passé au moins une fois, toutes versions confondues. `id` : le titre passé en dernier,
  * `starts` : toutes ses écoutes. `playlists` : celles qui le contiennent, likes compris, avec ses positions.
  */
+/** Titre vu à une position de sa playlist : le serveur ne le retire que s'il y est encore. */
+export interface TrackPosition {
+  position: number;
+  id: string;
+}
+
 export interface SkippedSong {
   id: string;
   name: string;
@@ -172,7 +178,7 @@ export interface SkippedSong {
   skippedAt: string;
   skips: number;
   starts: number;
-  playlists: { id: string; name: string; positions: number[] }[];
+  playlists: { id: string; name: string; tracks: TrackPosition[] }[];
 }
 
 /**

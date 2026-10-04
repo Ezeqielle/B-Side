@@ -2,6 +2,7 @@
 
 namespace App\Spotify;
 
+use App\Entity\Playlist as LibraryPlaylist;
 use App\Entity\User;
 use App\Spotify\Model\Artist;
 use App\Spotify\Model\Playlist;
@@ -22,8 +23,8 @@ class SpotifyApi
     /** Titres ajoutés ou retirés d'une playlist par requête, au plus. */
     private const int PLAYLIST_BATCH = 100;
 
-    /** Titres likés ou retirés des likes par requête, au plus. */
-    private const int LIBRARY_BATCH = 40;
+    /** Titres likés ou retirés des likes par requête, au plus : la limite la plus basse. */
+    public const int LIBRARY_BATCH = 40;
 
     public function __construct(
         #[Target('spotify.client')]
@@ -113,12 +114,19 @@ class SpotifyApi
     }
 
     /**
-     * Ajoute des titres à une playlist, à la fin ou à partir de `$position`.
+     * Ajoute des titres à une playlist, à la fin ou à partir de `$position`, ou aux likes (`Playlist::LIKED`),
+     * où ils arrivent toujours en tête.
      *
      * @param list<string> $trackIds
      */
-    public function addToPlaylist(User $user, string $playlistId, array $trackIds, ?int $position = null): void
+    public function addTracks(User $user, string $playlistId, array $trackIds, ?int $position = null): void
     {
+        if (LibraryPlaylist::LIKED === $playlistId) {
+            $this->sendToLibrary($user, 'PUT', $trackIds);
+
+            return;
+        }
+
         foreach (array_chunk($trackIds, self::PLAYLIST_BATCH) as $i => $ids) {
             $this->send($user, 'POST', self::playlistItems($playlistId), ['json' => array_filter([
                 'uris' => self::uris($ids),
@@ -128,40 +136,23 @@ class SpotifyApi
     }
 
     /**
-     * Retire des titres d'une playlist : toutes leurs occurrences, Spotify ne permet pas d'en viser une.
+     * Retire des titres d'une playlist, ou des likes (`Playlist::LIKED`) : toutes leurs occurrences,
+     * Spotify ne permet pas d'en viser une.
      *
      * @param list<string> $trackIds
      */
-    public function removeFromPlaylist(User $user, string $playlistId, array $trackIds): void
+    public function removeTracks(User $user, string $playlistId, array $trackIds): void
     {
+        if (LibraryPlaylist::LIKED === $playlistId) {
+            $this->sendToLibrary($user, 'DELETE', $trackIds);
+
+            return;
+        }
+
         foreach (array_chunk($trackIds, self::PLAYLIST_BATCH) as $ids) {
             $this->send($user, 'DELETE', self::playlistItems($playlistId), ['json' => [
                 'items' => array_map(static fn (string $uri): array => ['uri' => $uri], self::uris($ids)),
             ]]);
-        }
-    }
-
-    /**
-     * Like des titres.
-     *
-     * @param list<string> $trackIds
-     */
-    public function saveTracks(User $user, array $trackIds): void
-    {
-        foreach (array_chunk($trackIds, self::LIBRARY_BATCH) as $ids) {
-            $this->send($user, 'PUT', 'me/library', ['query' => ['uris' => implode(',', self::uris($ids))]]);
-        }
-    }
-
-    /**
-     * Retire des titres des likes.
-     *
-     * @param list<string> $trackIds
-     */
-    public function removeSavedTracks(User $user, array $trackIds): void
-    {
-        foreach (array_chunk($trackIds, self::LIBRARY_BATCH) as $ids) {
-            $this->send($user, 'DELETE', 'me/library', ['query' => ['uris' => implode(',', self::uris($ids))]]);
         }
     }
 
@@ -204,6 +195,18 @@ class SpotifyApi
         $response->getHeaders();
 
         return $response;
+    }
+
+    /**
+     * Like (`PUT`) ou retire des likes (`DELETE`).
+     *
+     * @param list<string> $trackIds
+     */
+    private function sendToLibrary(User $user, string $method, array $trackIds): void
+    {
+        foreach (array_chunk($trackIds, self::LIBRARY_BATCH) as $ids) {
+            $this->send($user, $method, 'me/library', ['query' => ['uris' => implode(',', self::uris($ids))]]);
+        }
     }
 
     private static function playlistItems(string $playlistId): string

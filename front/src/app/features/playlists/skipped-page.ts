@@ -185,8 +185,8 @@ export class SkippedPage {
           continue;
         }
         for (const playlist of song.playlists) {
-          const target = byPlaylist.get(playlist.id) ?? { ...playlist, positions: [] };
-          target.positions.push(...playlist.positions);
+          const target = byPlaylist.get(playlist.id) ?? { ...playlist, tracks: [] };
+          target.tracks.push(...playlist.tracks);
           byPlaylist.set(playlist.id, target);
         }
       }

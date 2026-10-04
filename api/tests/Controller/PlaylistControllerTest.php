@@ -52,6 +52,9 @@ class PlaylistControllerTest extends WebTestCase
     /** @var list<array{0: string, 1: mixed}> écritures sur Spotify : « méthode chemin?query » et corps JSON */
     private array $writes = [];
 
+    /** @var (\Closure(string): bool)|null écritures que Spotify refuse, d'après « méthode chemin?query » */
+    private ?\Closure $refuse = null;
+
     protected function setUp(): void
     {
         $this->client = static::createClient();
@@ -192,11 +195,11 @@ class PlaylistControllerTest extends WebTestCase
         self::assertSame([self::SONG_A, 'Song A', 2, 4], [$songA['id'], $songA['name'], $songA['skips'], $songA['starts']]);
         self::assertEquals(new \DateTimeImmutable('2022-06-02T10:00:00Z'), new \DateTimeImmutable($songA['skippedAt']));
         self::assertSame([
-            ['id' => 'mix', 'name' => 'Mix', 'positions' => [0]],
-            ['id' => 'liked', 'name' => 'Titres likés', 'positions' => [0]],
+            ['id' => 'mix', 'name' => 'Mix', 'tracks' => [['position' => 0, 'id' => self::SONG_A_OTHER_ALBUM]]],
+            ['id' => 'liked', 'name' => 'Titres likés', 'tracks' => [['position' => 0, 'id' => self::SONG_A]]],
         ], $songA['playlists'], 'Toutes versions confondues, likes compris');
         self::assertSame([self::SONG_B, 1, 1], [$songB['id'], $songB['skips'], $songB['starts']]);
-        self::assertSame([['id' => 'road-trip', 'name' => 'Road trip', 'positions' => [0]]], $songB['playlists']);
+        self::assertSame([['id' => 'road-trip', 'name' => 'Road trip', 'tracks' => [['position' => 0, 'id' => self::SONG_B]]]], $songB['playlists']);
 
         self::assertSame([self::SONG_B], array_column($this->get('/api/playlists/skipped?offset=1'), 'id'));
 
@@ -213,7 +216,7 @@ class PlaylistControllerTest extends WebTestCase
         }
 
         // Retiré de sa seule playlist, il quitte la liste
-        $this->post('/api/playlists/road-trip/remove', ['positions' => [0]]);
+        $this->remove('road-trip', [0 => self::SONG_B]);
         self::assertSame([self::SONG_A], array_column($this->get('/api/playlists/skipped'), 'id'));
     }
 
@@ -343,7 +346,7 @@ class PlaylistControllerTest extends WebTestCase
     {
         $this->sync();
 
-        self::assertSame(['removed' => 1], $this->post('/api/playlists/road-trip/remove', ['positions' => [0, 99]]));
+        self::assertSame(['removed' => 1, 'skipped' => 1], $this->remove('road-trip', [0 => self::SONG_B, 99 => self::SONG_C]));
         self::assertEquals([new SyncPlaylists($this->userId())], $this->queued(), 'Synchro pour réaligner');
         self::assertSame([
             ['POST me/playlists', ['name' => 'Spotylist · Corbeille', 'description' => 'Titres retirés par Spotylist, à remettre en place depuis son journal.', 'public' => false]],
@@ -360,8 +363,8 @@ class PlaylistControllerTest extends WebTestCase
 
         // La corbeille sert à nouveau, et un titre n'y est mis qu'une fois
         $this->writes = [];
-        $this->post('/api/playlists/mix/remove', ['positions' => [1]]);
-        $this->post('/api/playlists/road-trip/remove', ['positions' => [1]]);
+        $this->remove('mix', [1 => self::SONG_C]);
+        $this->remove('road-trip', [1 => self::SONG_C]);
         self::assertSame([
             ['POST playlists/trash/items', ['uris' => ['spotify:track:' . self::SONG_C]]],
             ['DELETE playlists/mix/items', ['items' => [['uri' => 'spotify:track:' . self::SONG_C]]]],
@@ -373,7 +376,7 @@ class PlaylistControllerTest extends WebTestCase
     public function testRemovedLikesAreUnliked(): void
     {
         $this->sync();
-        $this->post('/api/playlists/liked/remove', ['positions' => [1]]);
+        $this->remove('liked', [1 => self::SONG_C]);
 
         self::assertSame(['DELETE me/library?uris=spotify:track:' . self::SONG_C, null], $this->writes[2]);
         self::assertSame([self::SONG_A], array_column($this->get('/api/playlists/liked/tracks'), 'id'));
@@ -386,7 +389,7 @@ class PlaylistControllerTest extends WebTestCase
         $this->mixExtra = [$this->item(self::SONG_C, 'Song C', 'Artist C', null)];
         $this->sync();
 
-        $this->post('/api/playlists/mix/remove', ['positions' => [1]]);
+        $this->remove('mix', [1 => self::SONG_C]);
 
         self::assertSame([
             ['DELETE playlists/mix/items', ['items' => [['uri' => 'spotify:track:' . self::SONG_C]]]],
@@ -398,8 +401,8 @@ class PlaylistControllerTest extends WebTestCase
     public function testRestoredTracksGoBackAndLeaveTheTrash(): void
     {
         $this->sync();
-        $this->post('/api/playlists/road-trip/remove', ['positions' => [0, 1]]);
-        $this->post('/api/playlists/liked/remove', ['positions' => [1]]);
+        $this->remove('road-trip', [0 => self::SONG_B, 1 => self::SONG_C]);
+        $this->remove('liked', [1 => self::SONG_C]);
         $ids = array_column($this->get('/api/removals'), 'id', 'name');
 
         $this->writes = [];
@@ -418,7 +421,7 @@ class PlaylistControllerTest extends WebTestCase
     public function testTracksOfAVanishedPlaylistAreNotRestored(): void
     {
         $this->sync();
-        $this->post('/api/playlists/road-trip/remove', ['positions' => [0]]);
+        $this->remove('road-trip', [0 => self::SONG_B]);
         unset($this->snapshots['road-trip']);
         $this->sync();
 
@@ -428,7 +431,7 @@ class PlaylistControllerTest extends WebTestCase
     public function testTrashIsHiddenAndReplacedOnceDeleted(): void
     {
         $this->sync();
-        $this->post('/api/playlists/road-trip/remove', ['positions' => [0]]);
+        $this->remove('road-trip', [0 => self::SONG_B]);
         $this->sync();
 
         self::assertSame(['Mix', 'Road trip', 'Titres likés'], array_column($this->get('/api/playlists'), 'name'));
@@ -436,8 +439,57 @@ class PlaylistControllerTest extends WebTestCase
         unset($this->snapshots['trash']);
         $this->sync();
         $this->writes = [];
-        $this->post('/api/playlists/road-trip/remove', ['positions' => [1]]);
+        $this->remove('road-trip', [1 => self::SONG_C]);
         self::assertContains('POST me/playlists', array_column($this->writes, 0), 'Nouvelle corbeille');
+    }
+
+    public function testTrackNoLongerAtItsPositionIsLeftInPlace(): void
+    {
+        $this->sync();
+
+        self::assertSame(['removed' => 0, 'skipped' => 1], $this->remove('road-trip', [0 => self::SONG_C]), 'Song B est en 0');
+        self::assertSame([], $this->writes);
+        self::assertSame([], $this->queued());
+        self::assertCount(2, $this->get('/api/playlists/road-trip/tracks'));
+    }
+
+    public function testRemovedEverywhereWithASingleSync(): void
+    {
+        $this->sync();
+
+        self::assertSame(['removed' => 3, 'skipped' => 0], $this->post('/api/playlists/remove', ['targets' => [
+            ['playlistId' => 'mix', 'tracks' => self::tracks([1 => self::SONG_C])],
+            ['playlistId' => 'road-trip', 'tracks' => self::tracks([1 => self::SONG_C])],
+            ['playlistId' => 'liked', 'tracks' => self::tracks([1 => self::SONG_C])],
+        ]]));
+        self::assertEquals([new SyncPlaylists($this->userId())], $this->queued());
+        self::assertSame([
+            ['POST playlists/trash/items', ['uris' => ['spotify:track:' . self::SONG_C]]],
+            ['DELETE playlists/mix/items', ['items' => [['uri' => 'spotify:track:' . self::SONG_C]]]],
+            ['DELETE playlists/road-trip/items', ['items' => [['uri' => 'spotify:track:' . self::SONG_C]]]],
+            ['DELETE me/library?uris=spotify:track:' . self::SONG_C, null],
+        ], \array_slice($this->writes, 1), 'Mis une seule fois dans la corbeille');
+        self::assertCount(3, $this->get('/api/removals'));
+    }
+
+    public function testBatchesRemovedBeforeASpotifyErrorAreInTheJournal(): void
+    {
+        $this->likes = array_map($this->like(...), range(1, 45));
+        $this->sync();
+        $deletes = 0;
+        $this->refuse = static function (string $request) use (&$deletes): bool {
+            return str_starts_with($request, 'DELETE me/library') && 2 === ++$deletes;
+        };
+
+        $this->client->jsonRequest('POST', '/api/playlists/liked/remove', ['tracks' => self::tracks(array_map(
+            static fn (int $i): string => \sprintf('L%021d', $i + 1),
+            range(0, 44),
+        ))]);
+
+        self::assertResponseStatusCodeSame(500);
+        self::assertEquals([new SyncPlaylists($this->userId())], $this->queued(), 'Synchro malgré l\'erreur');
+        self::assertCount(40, $this->get('/api/removals'), 'Le premier lot');
+        self::assertCount(5, $this->get('/api/playlists/liked/tracks'));
     }
 
     public function testCreatedPlaylistGetsTheTracksInOrder(): void
@@ -469,9 +521,13 @@ class PlaylistControllerTest extends WebTestCase
     {
         $this->sync();
 
-        $this->client->jsonRequest('POST', '/api/playlists/road-trip/remove', ['positions' => []]);
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/remove', ['tracks' => []]);
         self::assertResponseStatusCodeSame(422);
-        $this->client->jsonRequest('POST', '/api/playlists/discover/remove', ['positions' => [0]]);
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/remove', ['tracks' => [['position' => 0, 'id' => '']]]);
+        self::assertResponseStatusCodeSame(422);
+        $this->client->jsonRequest('POST', '/api/playlists/remove', ['targets' => [['playlistId' => 'road-trip', 'tracks' => []]]]);
+        self::assertResponseStatusCodeSame(422);
+        $this->client->jsonRequest('POST', '/api/playlists/discover/remove', ['tracks' => self::tracks([0 => self::SONG_A])]);
         self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
         $this->client->jsonRequest('POST', '/api/removals/restore', ['ids' => [-1]]);
         self::assertResponseStatusCodeSame(422);
@@ -542,6 +598,10 @@ class PlaylistControllerTest extends WebTestCase
     {
         $request = $method . ' ' . substr($url, \strlen('https://api.spotify.com/v1/'));
         $this->writes[] = [$request, isset($options['body']) && '' !== $options['body'] ? json_decode($options['body'], true) : null];
+
+        if (null !== $this->refuse && ($this->refuse)($request)) {
+            return $this->forbidden();
+        }
 
         if ('POST me/playlists' === $request) {
             if ('Spotylist · Corbeille' !== json_decode($options['body'], true)['name']) {
@@ -626,6 +686,26 @@ class PlaylistControllerTest extends WebTestCase
         self::assertResponseIsSuccessful();
 
         return json_decode((string) $this->client->getResponse()->getContent(), true);
+    }
+
+    /**
+     * @param array<int, string> $tracks id Spotify des titres vus, par position
+     *
+     * @return array<mixed>
+     */
+    private function remove(string $playlistId, array $tracks): array
+    {
+        return $this->post('/api/playlists/' . $playlistId . '/remove', ['tracks' => self::tracks($tracks)]);
+    }
+
+    /**
+     * @param array<int, string> $tracks
+     *
+     * @return list<array{position: int, id: string}>
+     */
+    private static function tracks(array $tracks): array
+    {
+        return array_map(static fn (int $position, string $id): array => ['position' => $position, 'id' => $id], array_keys($tracks), $tracks);
     }
 
     /**

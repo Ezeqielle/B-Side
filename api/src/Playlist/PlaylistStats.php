@@ -207,7 +207,7 @@ final readonly class PlaylistStats
             WITH skipped AS (' . $skipped->getSQL() . '),
             copies AS (
                 SELECT lower(t.name) AS name, lower(t.artist_name) AS artist, pl.spotify_id AS id, pl.name AS playlist_name,
-                    array_agg(pt.position ORDER BY pt.position) AS positions
+                    json_agg(json_build_object(\'position\', pt.position, \'id\', t.id) ORDER BY pt.position) AS tracks
                 FROM playlist pl
                 INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
                 INNER JOIN track t ON t.id = pt.track_id
@@ -216,7 +216,7 @@ final readonly class PlaylistStats
             )
             SELECT s.id, t.name, t.artist_name, s.image_url, s.skipped_at, s.skips, s.starts,
                 COALESCE((
-                    SELECT json_agg(json_build_object(\'id\', c.id, \'name\', c.playlist_name, \'positions\', c.positions) ORDER BY lower(c.playlist_name))
+                    SELECT json_agg(json_build_object(\'id\', c.id, \'name\', c.playlist_name, \'tracks\', c.tracks) ORDER BY lower(c.playlist_name))
                     FROM copies c
                     WHERE (c.name, c.artist) = (s.name, s.artist)
                 ), \'[]\') AS playlists

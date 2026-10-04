@@ -68,21 +68,24 @@ Stats (`App\Playlist\PlaylistStats`) : `GET /api/playlists`, `/overview`, `/{id}
 
 ## Nettoyage
 
-`App\Playlist\PlaylistCleanup`, appelé par `POST /api/playlists/{id}/remove` (positions des titres) et `POST /api/removals/restore`.
+`App\Playlist\PlaylistCleanup`, appelé par `POST /api/playlists/remove` (plusieurs playlists, `targets: [{playlistId, tracks}]`), `POST /api/playlists/{id}/remove` (une seule, `tracks`) et `POST /api/removals/restore`.
+
+0. Chaque titre visé arrive avec sa position et son id Spotify (`tracks: [{position, id}]`). Un titre qui n'est plus à cette position (la synchro a renuméroté la playlist) reste en place et compte dans `skipped` : la réponse est `{removed, skipped}`.
 
 1. Rien n'est définitif : un titre retiré est d'abord ajouté à la playlist privée « Spotylist · Corbeille », créée au premier retrait (`user.trash_playlist_id`). La synchro l'ignore, et l'oublie si elle a disparu de la bibliothèque : une autre est créée au retrait suivant.
 2. Chaque titre retiré est noté dans `removal`, avec sa playlist (id et nom), sa position et sa date d'ajout. Les titres d'un même retrait partagent leur `removed_at`. `GET /api/removals` donne le journal.
 3. Traitement par lots de 40 (la limite de `/me/library`) : corbeille, retrait de la source, journal. Après une erreur, chaque lot retiré est dans le journal.
 4. Spotify retire toutes les occurrences d'un titre d'une playlist : celles qu'on garde sont remises à leur position.
-5. Le contenu en base est mis à jour tout de suite, puis une synchro réaligne positions et versions.
+5. Le contenu en base est mis à jour tout de suite, puis une seule synchro, quel que soit le nombre de playlists, réaligne positions et versions.
 6. Remise en place : en tête des likes, ou à la fin de sa playlist si elle existe encore. Spotify ne permet pas de rendre la date d'ajout d'origine. Le titre quitte la corbeille, sauf s'il y est pour un autre retrait.
 
 Côté front :
 
 - Page d'une playlist, bouton « Nettoyer » : des règles présélectionnent les titres, à décocher à la main. Elles sont dans l'URL (`?added=6&never=1&idle=24&skip=60&starts=3`, voir `cleanup-rules.ts`). Les durées se comptent jusqu'à la dernière écoute importée, pas jusqu'à aujourd'hui.
 - Titres à garder : un titre décoché est enregistré dans `kept_track` (par playlist, `POST /api/playlists/{id}/kept`) et reste décoché aux nettoyages suivants, quelles que soient les règles. Page `/playlists/{id}/a-garder` pour revoir la liste et rendre des titres au nettoyage.
-- Page `/playlists/passes` (`GET /api/playlists/skipped`) : les derniers morceaux passés parmi ceux des playlists et des likes, avec leur nombre total de passages, filtrés par deux seuils activables et cumulables, nombre de passages et part des écoutes passées (`SkipFilter`, `?skips=3&rate=60` dans l'URL). Un morceau coché est retiré de toutes les playlists qui le contiennent, toutes versions et likes compris, une playlist après l'autre.
+- Page `/playlists/passes` (`GET /api/playlists/skipped`) : les derniers morceaux passés parmi ceux des playlists et des likes, avec leur nombre total de passages, filtrés par deux seuils activables et cumulables, nombre de passages et part des écoutes passées (`SkipFilter`, `?skips=3&rate=60` dans l'URL). Un morceau coché est retiré de toutes les playlists qui le contiennent, toutes versions et likes compris, en une requête.
 - Page `/journal` : les retraits, à remettre en place un par un ou en entier.
+- Les pages qui retirent passent par `removal()` (`features/playlists/removal.ts`) : après un retrait, cases et bouton restent verrouillés jusqu'à l'arrivée de la liste relue, pour ne jamais viser des positions périmées.
 
 ## Doublons
 

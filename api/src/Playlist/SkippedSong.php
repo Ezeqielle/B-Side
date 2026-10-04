@@ -8,8 +8,8 @@ namespace App\Playlist;
 final readonly class SkippedSong
 {
     /**
-     * @param list<array{id: string, name: string, positions: list<int>}> $playlists playlists lisibles qui le
-     *                                                                               contiennent, likes compris, et ses positions dans chacune
+     * @param list<array{id: string, name: string, tracks: list<array{position: int, id: string}>}> $playlists playlists
+     *                                                                                                         lisibles qui le contiennent, likes compris, et ses titres dans chacune
      */
     public function __construct(
         /** Titre passé en dernier. */

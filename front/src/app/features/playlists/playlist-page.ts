@@ -1,6 +1,6 @@
-import { DatePipe, DecimalPipe, Location, PercentPipe } from '@angular/common';
-import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { DatePipe, DecimalPipe, PercentPipe } from '@angular/common';
+import { Component, computed, inject, input, linkedSignal, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCardImports } from '@spartan-ng/helm/card';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
@@ -9,8 +9,9 @@ import { HistoryApi } from '../../core/history-api';
 import { PlaylistTrackStat } from '../../core/models';
 import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
+import { urlState } from '../../core/url-state';
 import { CleanupPanel } from './cleanup-panel';
-import { PRESETS, matchesRules, paramsOf, rulesOf } from './cleanup-rules';
+import { CLEANUP_PARAMS, PRESETS, matchesRules } from './cleanup-rules';
 import { PlaylistCover } from './playlist-cover';
 import { removal } from './removal';
 import { RemovalOutcome, RemoveTracks } from './remove-tracks';
@@ -201,19 +202,11 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
 export class PlaylistPage {
   /** Id Spotify, depuis l'URL. */
   readonly id = input.required<string>();
-  /** Règles de nettoyage, depuis l'URL (voir CleanupParams). */
-  readonly added = input<string>();
-  readonly never = input<string>();
-  readonly idle = input<string>();
-  readonly skip = input<string>();
-  readonly starts = input<string>();
 
   protected readonly presets = PRESETS;
   protected readonly sort = signal<Sort>({ key: 'position', desc: false });
 
   private readonly api = inject(PlaylistsApi);
-  private readonly router = inject(Router);
-  private readonly location = inject(Location);
   protected readonly playlist = this.api.playlist(this.id);
   protected readonly tracks = this.api.tracks(this.id);
   protected readonly kept = this.api.kept(this.id);
@@ -224,10 +217,8 @@ export class PlaylistPage {
     return minutes < 60 ? `${minutes} min` : `${Math.floor(minutes / 60)} h ${minutes % 60} min`;
   });
 
-  /** Règles de nettoyage, `null` hors nettoyage. Modifiées ici, elles sont recopiées dans l'URL. */
-  protected readonly rules = linkedSignal(() =>
-    rulesOf({ added: this.added(), never: this.never(), idle: this.idle(), skip: this.skip(), starts: this.starts() }),
-  );
+  /** Règles de nettoyage, `null` hors nettoyage, gardées dans l'URL. */
+  protected readonly rules = urlState(CLEANUP_PARAMS);
 
   /** Dernière écoute importée : les durées des règles se comptent jusque-là. */
   protected readonly reference = computed(() => this.history.value()?.lastPlayedAt ?? null);
@@ -275,16 +266,6 @@ export class PlaylistPage {
     ],
     sources: [this.playlist, this.tracks],
   });
-
-  constructor() {
-    // Règles dans l'URL, sans navigation : glisser un curseur ne recharge rien
-    effect(() => {
-      const rules = this.rules();
-      const url = this.router.parseUrl(this.router.url);
-      url.queryParams = rules ? paramsOf(rules) : {};
-      this.location.replaceState(this.router.serializeUrl(url));
-    });
-  }
 
   protected exclude(trackId: string, excluded: boolean): void {
     this.keep([trackId], excluded);

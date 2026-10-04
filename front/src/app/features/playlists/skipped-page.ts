@@ -1,20 +1,21 @@
-import { DecimalPipe, Location, PercentPipe } from '@angular/common';
-import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
-import { Router, RouterLink } from '@angular/router';
+import { DecimalPipe, PercentPipe } from '@angular/common';
+import { Component, computed, inject, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HistoryApi } from '../../core/history-api';
-import { SkipFilter, SkippedSong } from '../../core/models';
+import { SkippedSong } from '../../core/models';
 import { paged } from '../../core/paged';
 import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview, trackArtwork } from '../../core/track-preview';
+import { urlState } from '../../core/url-state';
 import { RemovalTarget, removal } from './removal';
 import { RemovalOutcome, RemoveTracks } from './remove-tracks';
 import { SincePipe } from './since';
 import { SkipFilterPanel } from './skip-filter-panel';
-import { skipFilterOf, skipParamsOf } from './skip-filter';
+import { SKIP_PARAMS } from './skip-filter';
 
 const LIMIT = 30;
 
@@ -145,21 +146,13 @@ const OFTEN = 3;
   `,
 })
 export class SkippedPage {
-  /** Seuils depuis l'URL (voir SkipParams). */
-  readonly skips = input<string>();
-  readonly rate = input<string>();
-
   private readonly api = inject(PlaylistsApi);
-  private readonly router = inject(Router);
-  private readonly location = inject(Location);
   protected readonly history = inject(HistoryApi).summary();
   protected readonly artwork = trackArtwork;
   protected readonly often = OFTEN;
 
-  /** Seuils de la liste. Modifiés ici, ils sont recopiés dans l'URL. */
-  protected readonly filter = linkedSignal<SkipFilter>(() =>
-    skipFilterOf({ skips: this.skips(), rate: this.rate() }),
-  );
+  /** Seuils de la liste, gardés dans l'URL. */
+  protected readonly filter = urlState(SKIP_PARAMS);
 
   protected readonly songs = paged<SkippedSong>({
     reset: this.filter,
@@ -194,15 +187,6 @@ export class SkippedPage {
     },
     sources: [this.songs],
   });
-
-  constructor() {
-    // Seuils dans l'URL, sans navigation : glisser un curseur ne recharge que la liste
-    effect(() => {
-      const url = this.router.parseUrl(this.router.url);
-      url.queryParams = skipParamsOf(this.filter());
-      this.location.replaceState(this.router.serializeUrl(url));
-    });
-  }
 
   protected toggle(id: string, checked: boolean): void {
     this.selected.update((selected) => {

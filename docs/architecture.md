@@ -81,7 +81,7 @@ Stats (`App\Playlist\PlaylistStats`) : `GET /api/playlists`, `/overview`, `/{id}
 
 Côté front :
 
-- Page d'une playlist, bouton « Nettoyer » : des règles présélectionnent les titres, à décocher à la main. Elles sont dans l'URL (`?added=6&never=1&idle=24&skip=60&starts=3`, voir `cleanup-rules.ts`). Les durées se comptent jusqu'à la dernière écoute importée, pas jusqu'à aujourd'hui.
+- Page d'une playlist, bouton « Nettoyer » : des règles présélectionnent les titres, à décocher à la main. Elles sont dans l'URL (`?added=6&never=1&idle=24&skip=60&starts=3`, voir `cleanup-rules.ts`), comme les seuils des titres passés, via `urlState()` (`core/url-state.ts`) : recopiées sans navigation, et ramenées dans les bornes des curseurs. Les durées se comptent jusqu'à la dernière écoute importée, pas jusqu'à aujourd'hui.
 - Titres à garder : un titre décoché est enregistré dans `kept_track` (par playlist, `POST /api/playlists/{id}/kept`) et reste décoché aux nettoyages suivants, quelles que soient les règles. Page `/playlists/{id}/a-garder` pour revoir la liste et rendre des titres au nettoyage.
 - Page `/playlists/passes` (`GET /api/playlists/skipped`) : les derniers morceaux passés parmi ceux des playlists et des likes, avec leur nombre total de passages, filtrés par deux seuils activables et cumulables, nombre de passages et part des écoutes passées (`SkipFilter`, `?skips=3&rate=60` dans l'URL). Un morceau coché est retiré de toutes les playlists qui le contiennent, toutes versions et likes compris, en une requête.
 - Page `/journal` : les retraits, à remettre en place un par un ou en entier.

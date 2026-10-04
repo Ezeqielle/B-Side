@@ -1,4 +1,5 @@
 import { PlaylistTrackStat } from '../../core/models';
+import { UrlCodec } from '../../core/url-state';
 import { Bounds, bounded } from './bounded';
 
 const MONTH = 30 * 86_400_000;
@@ -98,6 +99,13 @@ export function rulesOf(params: CleanupParams): CleanupRules | null {
     minStarts: bounded(params.starts, STARTS) ?? STARTS.initial,
   };
 }
+
+/** Règles dans l'URL de la page d'une playlist, `null` hors nettoyage. */
+export const CLEANUP_PARAMS: UrlCodec<CleanupRules | null> = {
+  keys: ['added', 'never', 'idle', 'skip', 'starts'],
+  parse: rulesOf,
+  serialize: (rules) => (rules ? paramsOf(rules) : {}),
+};
 
 /** « 6 mois », « 2 ans », « 18 mois ». */
 export function months(n: number): string {

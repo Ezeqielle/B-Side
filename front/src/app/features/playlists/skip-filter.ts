@@ -1,4 +1,5 @@
 import { SkipFilter } from '../../core/models';
+import { UrlCodec } from '../../core/url-state';
 import { Bounds, bounded } from './bounded';
 
 /** Bornes des curseurs, et valeurs à l'activation d'un seuil. */
@@ -22,3 +23,10 @@ export function skipFilterOf(params: SkipParams): SkipFilter {
     minRate: bounded(params.rate, RATE),
   };
 }
+
+/** Seuils dans l'URL de la page des titres passés. */
+export const SKIP_PARAMS: UrlCodec<SkipFilter> = {
+  keys: ['skips', 'rate'],
+  parse: skipFilterOf,
+  serialize: skipParamsOf,
+};

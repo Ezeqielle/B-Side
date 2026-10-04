@@ -3,7 +3,7 @@ import { Component, computed, input, model } from '@angular/core';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmSliderImports } from '@spartan-ng/helm/slider';
 import { HlmSwitchImports } from '@spartan-ng/helm/switch';
-import { CleanupRules, PRESETS, months, sameRules } from './cleanup-rules';
+import { ADDED, CleanupRules, IDLE, PRESETS, SKIP, STARTS, months, sameRules } from './cleanup-rules';
 
 /**
  * Réglage des règles de nettoyage : préréglages, protection des ajouts récents, et trois critères.
@@ -38,8 +38,8 @@ import { CleanupRules, PRESETS, months, sameRules } from './cleanup-rules';
         </p>
         <hlm-slider
           aria-labelledby="cleanup-added"
-          [min]="0"
-          [max]="24"
+          [min]="added.min"
+          [max]="added.max"
           [value]="[rules().addedMonths]"
           (valueChange)="set({ addedMonths: $event[0] })"
         />
@@ -50,61 +50,63 @@ import { CleanupRules, PRESETS, months, sameRules } from './cleanup-rules';
         <label for="cleanup-never" class="text-sm">Jamais écoutés</label>
       </div>
 
+      @let idleMonths = rules().idleMonths;
       <div class="grid gap-2">
         <div class="flex items-center gap-3">
           <hlm-switch
             inputId="cleanup-idle"
-            [checked]="rules().idleMonths !== null"
-            (checkedChange)="set({ idleMonths: $event ? 24 : null })"
+            [checked]="idleMonths !== null"
+            (checkedChange)="set({ idleMonths: $event ? idle.initial : null })"
           />
           <label for="cleanup-idle" class="text-sm">
             Plus écoutés depuis
-            @if (rules().idleMonths; as idle) {
-              <strong>{{ months(idle) }}</strong>
+            @if (idleMonths !== null) {
+              <strong>{{ months(idleMonths) }}</strong>
             } @else {
               un moment
             }
           </label>
         </div>
-        @if (rules().idleMonths; as idle) {
+        @if (idleMonths !== null) {
           <hlm-slider
             aria-label="Plus écoutés depuis, en mois"
-            [min]="1"
-            [max]="60"
-            [value]="[idle]"
+            [min]="idle.min"
+            [max]="idle.max"
+            [value]="[idleMonths]"
             (valueChange)="set({ idleMonths: $event[0] })"
           />
         }
       </div>
 
+      @let rate = rules().skipRate;
       <div class="grid gap-2">
         <div class="flex items-center gap-3">
           <hlm-switch
             inputId="cleanup-skip"
-            [checked]="rules().skipRate !== null"
-            (checkedChange)="set({ skipRate: $event ? 0.6 : null })"
+            [checked]="rate !== null"
+            (checkedChange)="set({ skipRate: $event ? skip.initial / 100 : null })"
           />
           <label for="cleanup-skip" class="text-sm">
             Souvent passés
-            @if (rules().skipRate; as rate) {
+            @if (rate !== null) {
               : <strong>{{ rate | percent }}</strong> des lancements, sur au moins
               <strong>{{ rules().minStarts }}</strong>
             }
           </label>
         </div>
-        @if (rules().skipRate; as rate) {
+        @if (rate !== null) {
           <hlm-slider
             aria-label="Part des lancements passés, en %"
-            [min]="30"
-            [max]="100"
+            [min]="skip.min"
+            [max]="skip.max"
             [step]="5"
             [value]="[rate * 100]"
             (valueChange)="set({ skipRate: $event[0] / 100 })"
           />
           <hlm-slider
             aria-label="Nombre de lancements minimum"
-            [min]="1"
-            [max]="20"
+            [min]="starts.min"
+            [max]="starts.max"
             [value]="[rules().minStarts]"
             (valueChange)="set({ minStarts: $event[0] })"
           />
@@ -126,6 +128,10 @@ export class CleanupPanel {
   readonly reference = input<string | null>(null);
 
   protected readonly presets = PRESETS;
+  protected readonly added = ADDED;
+  protected readonly idle = IDLE;
+  protected readonly skip = SKIP;
+  protected readonly starts = STARTS;
   protected readonly months = months;
 
   protected readonly activePreset = computed(() => {

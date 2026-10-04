@@ -1,8 +1,9 @@
 import { SkipFilter } from '../../core/models';
+import { Bounds, bounded } from './bounded';
 
 /** Bornes des curseurs, et valeurs à l'activation d'un seuil. */
-export const SKIPS = { min: 1, max: 20, initial: 3 };
-export const RATE = { min: 5, max: 100, initial: 50 };
+export const SKIPS: Bounds = { min: 1, max: 20, initial: 3 };
+export const RATE: Bounds = { min: 5, max: 100, initial: 50 };
 
 /** Query params des seuils : `?skips=3&rate=60`. */
 export type SkipParams = Partial<Record<'skips' | 'rate', string>>;
@@ -20,9 +21,4 @@ export function skipFilterOf(params: SkipParams): SkipFilter {
     minSkips: bounded(params.skips, SKIPS),
     minRate: bounded(params.rate, RATE),
   };
-}
-
-function bounded(value: string | undefined, { min, max }: { min: number; max: number }): number | null {
-  const n = Math.trunc(Number(value));
-  return value && Number.isFinite(n) ? Math.min(Math.max(n, min), max) : null;
 }

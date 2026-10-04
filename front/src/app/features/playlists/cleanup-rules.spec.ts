@@ -1,5 +1,5 @@
 import { PlaylistTrackStat } from '../../core/models';
-import { CleanupRules, matchesRules, months, paramsOf, rulesOf, sameRules } from './cleanup-rules';
+import { CleanupRules, PRESETS, matchesRules, months, paramsOf, rulesOf, sameRules } from './cleanup-rules';
 
 const REFERENCE = Date.parse('2026-09-01T00:00:00Z');
 
@@ -65,15 +65,37 @@ describe('cleanup params', () => {
     expect(rulesOf(paramsOf(NONE))).toEqual(NONE);
   });
 
-  it('is not cleaning without rules, and ignores invalid values', () => {
+  it('is not cleaning without rules, and disables invalid values', () => {
     expect(rulesOf({})).toBeNull();
-    expect(rulesOf({ added: 'x', idle: '-3', skip: '250' })).toEqual({
+    expect(rulesOf({ added: 'x', idle: 'abc', skip: '' })).toEqual({
       addedMonths: 0,
       never: false,
       idleMonths: null,
-      skipRate: 1,
+      skipRate: null,
       minStarts: 3,
     });
+  });
+
+  it('keeps values within the slider bounds', () => {
+    expect(rulesOf({ added: '99', idle: '0', skip: '0', starts: '0' })).toEqual({
+      addedMonths: 24,
+      never: false,
+      idleMonths: 1,
+      skipRate: 0.3,
+      minStarts: 1,
+    });
+    expect(rulesOf({ added: '-3', idle: '-3', skip: '250', starts: '99' })).toMatchObject({
+      addedMonths: 0,
+      idleMonths: 1,
+      skipRate: 1,
+      minStarts: 20,
+    });
+  });
+
+  it('round-trips the presets', () => {
+    for (const { rules } of PRESETS) {
+      expect(rulesOf(paramsOf(rules))).toEqual(rules);
+    }
   });
 });
 

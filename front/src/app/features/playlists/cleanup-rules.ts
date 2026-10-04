@@ -1,7 +1,13 @@
 import { PlaylistTrackStat } from '../../core/models';
+import { Bounds, bounded } from './bounded';
 
 const MONTH = 30 * 86_400_000;
-const MIN_STARTS = 3;
+
+/** Bornes des curseurs, et valeurs à l'activation d'un critère : mois, mois, %, lancements. */
+export const ADDED: Bounds = { min: 0, max: 24, initial: 6 };
+export const IDLE: Bounds = { min: 1, max: 60, initial: 24 };
+export const SKIP: Bounds = { min: 30, max: 100, initial: 60 };
+export const STARTS: Bounds = { min: 1, max: 20, initial: 3 };
 
 /**
  * Titres à retirer d'une playlist : ceux ajoutés depuis assez longtemps (protection), et qui répondent
@@ -21,19 +27,18 @@ export interface CleanupRules {
   minStarts: number;
 }
 
+const NONE: CleanupRules = {
+  addedMonths: ADDED.initial,
+  never: false,
+  idleMonths: null,
+  skipRate: null,
+  minStarts: STARTS.initial,
+};
+
 export const PRESETS: readonly { label: string; rules: CleanupRules }[] = [
-  {
-    label: 'Jamais écoutés',
-    rules: { addedMonths: 6, never: true, idleMonths: null, skipRate: null, minStarts: MIN_STARTS },
-  },
-  {
-    label: 'Oubliés',
-    rules: { addedMonths: 6, never: true, idleMonths: 24, skipRate: null, minStarts: MIN_STARTS },
-  },
-  {
-    label: 'Souvent passés',
-    rules: { addedMonths: 6, never: false, idleMonths: null, skipRate: 0.6, minStarts: MIN_STARTS },
-  },
+  { label: 'Jamais écoutés', rules: { ...NONE, never: true } },
+  { label: 'Oubliés', rules: { ...NONE, never: true, idleMonths: IDLE.initial } },
+  { label: 'Souvent passés', rules: { ...NONE, skipRate: SKIP.initial / 100 } },
 ];
 
 /** Mêmes règles, sans tenir compte du minimum de lancements quand le critère est désactivé. */
@@ -76,22 +81,21 @@ export function paramsOf(rules: CleanupRules): CleanupParams {
   };
 }
 
-/** Règles de l'URL, `null` sans règle : la page n'est pas en mode nettoyage. */
+/**
+ * Règles de l'URL, `null` sans règle : la page n'est pas en mode nettoyage. Une valeur hors bornes y est
+ * ramenée, une valeur invalide désactive son critère.
+ */
 export function rulesOf(params: CleanupParams): CleanupRules | null {
   if (params.added === undefined) {
     return null;
   }
-  const number = (value: string | undefined) => {
-    const n = Number(value);
-    return value !== undefined && value !== '' && Number.isFinite(n) && n >= 0 ? n : null;
-  };
-  const skip = number(params.skip);
+  const skip = bounded(params.skip, SKIP);
   return {
-    addedMonths: number(params.added) ?? 0,
+    addedMonths: bounded(params.added, ADDED) ?? ADDED.min,
     never: params.never === '1',
-    idleMonths: number(params.idle),
-    skipRate: skip !== null ? Math.min(skip, 100) / 100 : null,
-    minStarts: number(params.starts) || MIN_STARTS,
+    idleMonths: bounded(params.idle, IDLE),
+    skipRate: skip !== null ? skip / 100 : null,
+    minStarts: bounded(params.starts, STARTS) ?? STARTS.initial,
   };
 }
 

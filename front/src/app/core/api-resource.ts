@@ -17,6 +17,8 @@ export interface ApiResource<T> {
   readonly value: Signal<T | undefined>;
   /** Vrai seulement quand ce qui est affiché ne correspond pas encore à la requête courante. */
   readonly isLoading: Signal<boolean>;
+  /** Vrai dès qu'une requête est en cours, rechargement en fond compris. */
+  readonly pending: Signal<boolean>;
   readonly error: Signal<unknown>;
   reload(): void;
 }
@@ -104,6 +106,7 @@ export function apiResource<T>(
   return {
     value: value.asReadonly(),
     isLoading,
+    pending: resource.isLoading,
     error: resource.error,
     reload: () => resource.reload(),
   };

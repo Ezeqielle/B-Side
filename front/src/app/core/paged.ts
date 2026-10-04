@@ -14,6 +14,8 @@ export interface Paged<T> {
   readonly isLoading: Signal<boolean>;
   /** Chargement de la page suivante. */
   readonly loadingMore: Signal<boolean>;
+  /** Vrai dès qu'une page est en cours de chargement, rechargement compris. */
+  readonly pending: Signal<boolean>;
   readonly error: Signal<unknown>;
   /** Une page incomplète est la dernière. */
   readonly hasMore: Signal<boolean>;
@@ -60,6 +62,7 @@ export function paged<T>(options: {
     items: computed(() => pages().flat()),
     isLoading: computed(() => source.isLoading() && !offset()),
     loadingMore: computed(() => source.isLoading() && !!offset()),
+    pending: source.pending,
     error: source.error,
     hasMore: computed(() => {
       const last = pages().length - 1;

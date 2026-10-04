@@ -148,6 +148,7 @@ export class TopTracksPage {
             : spotify.value(),
         ),
         isLoading: computed(() => source().isLoading()),
+        pending: computed(() => source().pending()),
         error: computed(() => source().error()),
         reload: () => source().reload(),
       };

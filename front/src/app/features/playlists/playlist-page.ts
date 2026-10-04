@@ -12,7 +12,8 @@ import { TrackPreview } from '../../core/track-preview';
 import { CleanupPanel } from './cleanup-panel';
 import { PRESETS, matchesRules, paramsOf, rulesOf } from './cleanup-rules';
 import { PlaylistCover } from './playlist-cover';
-import { RemoveTracks } from './remove-tracks';
+import { removal } from './removal';
+import { RemovalOutcome, RemoveTracks } from './remove-tracks';
 import { SincePipe } from './since';
 import { Sort, SortHeader, sortRows } from './sort-header';
 
@@ -46,6 +47,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
     HlmSkeletonImports,
     CleanupPanel,
     PlaylistCover,
+    RemovalOutcome,
     RemoveTracks,
     SincePipe,
     SortHeader,
@@ -71,11 +73,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
       </div>
     }
 
-    @if (outcome(); as message) {
-      <p class="bg-muted mb-6 rounded-lg px-4 py-3 text-sm" role="status">
-        {{ message }} <a routerLink="/journal" class="underline">Voir le journal</a>
-      </p>
-    }
+    <app-removal-outcome [removal]="removal" />
 
     @if (tracks.error()) {
       <p class="text-destructive" role="alert">Impossible de récupérer cette playlist.</p>
@@ -106,12 +104,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                   <span class="text-muted-foreground">({{ kept | number }} à garder, décochés)</span>
                 }
               </p>
-              <app-remove-tracks
-                [playlistId]="id()"
-                [playlistName]="playlist.value()?.name"
-                [positions]="selectedPositions()"
-                (done)="removed($event)"
-              />
+              <app-remove-tracks [removal]="removal" />
             </div>
           }
 
@@ -123,6 +116,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                     <th class="w-8 pb-2" scope="col">
                       <hlm-checkbox
                         aria-label="Tout sélectionner"
+                        [disabled]="removal.locked()"
                         [checked]="selected().length === candidates().length"
                         [indeterminate]="!!selected().length && selected().length < candidates().length"
                         (checkedChange)="excludeAll(!$event)"
@@ -148,6 +142,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
                       <td class="py-2">
                         <hlm-checkbox
                           [aria-label]="'Retirer ' + track.name"
+                          [disabled]="removal.locked()"
                           [checked]="!excluded().has(track.id)"
                           (checkedChange)="exclude(track.id, !$event)"
                         />
@@ -270,8 +265,16 @@ export class PlaylistPage {
   });
   protected readonly shownRows = computed(() => this.rows().slice(0, this.shown()));
 
-  protected readonly selectedPositions = computed(() => this.selected().map((track) => track.position));
-  protected readonly outcome = signal<string | null>(null);
+  protected readonly removal = removal({
+    targets: () => [
+      {
+        id: this.id(),
+        name: this.playlist.value()?.name ?? '',
+        positions: this.selected().map((track) => track.position),
+      },
+    ],
+    sources: [this.playlist, this.tracks],
+  });
 
   constructor() {
     // Règles dans l'URL, sans navigation : glisser un curseur ne recharge rien
@@ -309,11 +312,5 @@ export class PlaylistPage {
       return next;
     });
     this.api.keep(this.id(), trackIds, kept).subscribe({ error: () => this.kept.reload() });
-  }
-
-  protected removed(message: string): void {
-    this.outcome.set(message);
-    this.playlist.reload();
-    this.tracks.reload();
   }
 }

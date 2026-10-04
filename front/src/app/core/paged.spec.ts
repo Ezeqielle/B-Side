@@ -17,7 +17,7 @@ function setup(options: { keepPrevious?: boolean } = {}) {
     ...options,
     load: (page): ApiResource<number[]> => {
       requested = page;
-      return { value, isLoading, error: signal(undefined), reload: () => reloads++ };
+      return { value, isLoading, pending: isLoading, error: signal(undefined), reload: () => reloads++ };
     },
   });
   const respond = (items: number[]) => {
@@ -32,7 +32,11 @@ function setup(options: { keepPrevious?: boolean } = {}) {
     reset.set(key);
     isLoading.set(true);
   };
-  return { list, respond, more, restart, page: () => requested(), reloads: () => reloads };
+  const reload = () => {
+    isLoading.set(true);
+    list.reload();
+  };
+  return { list, respond, more, restart, reload, page: () => requested(), reloads: () => reloads };
 }
 
 describe('paged', () => {
@@ -94,5 +98,23 @@ describe('paged', () => {
     list.reload();
     expect(page()).toEqual({ offset: 0, limit: 3 });
     expect(reloads()).toBe(1);
+  });
+
+  it('reste en attente pendant le rechargement après « Charger plus »', () => {
+    const { list, respond, more, reload, page } = setup({ keepPrevious: true });
+    respond([1, 2, 3]);
+    expect(list.items()).toEqual([1, 2, 3]);
+    more();
+    respond([4, 5]);
+    expect(list.items()).toEqual([1, 2, 3, 4, 5]);
+    expect(list.pending()).toBe(false);
+
+    reload();
+    expect(page()).toEqual({ offset: 0, limit: 3 });
+    expect(list.items()).toEqual([1, 2, 3, 4, 5]);
+    expect(list.pending()).toBe(true);
+    respond([1, 3, 4]);
+    expect(list.pending()).toBe(false);
+    expect(list.items()).toEqual([1, 3, 4]);
   });
 });

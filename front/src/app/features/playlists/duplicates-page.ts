@@ -9,7 +9,8 @@ import { HlmSwitchImports } from '@spartan-ng/helm/switch';
 import { SongVersion } from '../../core/models';
 import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
-import { RemoveTracks } from './remove-tracks';
+import { removal } from './removal';
+import { RemovalOutcome, RemoveTracks } from './remove-tracks';
 import { SincePipe } from './since';
 import { defaultKept, minutes, removedByDefault } from './version-picks';
 
@@ -27,6 +28,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
     HlmRadioGroupImports,
     HlmSkeletonImports,
     HlmSwitchImports,
+    RemovalOutcome,
     RemoveTracks,
     SincePipe,
     TrackPreview,
@@ -47,11 +49,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
       </p>
     </div>
 
-    @if (outcome(); as message) {
-      <p class="bg-muted mb-6 rounded-lg px-4 py-3 text-sm" role="status">
-        {{ message }} <a routerLink="/journal" class="underline">Voir le journal</a>
-      </p>
-    }
+    <app-removal-outcome [removal]="removal" />
 
     @if (versions.error()) {
       <p class="text-destructive" role="alert">Impossible de récupérer les doublons de cette playlist.</p>
@@ -69,12 +67,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
               {{ groups.length | number }} morceaux ·
               <strong>{{ selected().length | number }}</strong> titres sélectionnés
             </p>
-            <app-remove-tracks
-              [playlistId]="id()"
-              [playlistName]="playlist.value()?.name"
-              [positions]="selected()"
-              (done)="removed($event)"
-            />
+            <app-remove-tracks [removal]="removal" />
           </div>
         </div>
 
@@ -90,13 +83,18 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
                 </p>
                 <div class="flex shrink-0 items-center gap-2">
                   <label [for]="'keep-all-' + key" class="text-xs">Tout garder</label>
-                  <hlm-switch [inputId]="'keep-all-' + key" [checked]="all" (checkedChange)="keepAll(key, $event)" />
+                  <hlm-switch
+                    [inputId]="'keep-all-' + key"
+                    [checked]="all"
+                    [disabled]="removal.locked()"
+                    (checkedChange)="keepAll(key, $event)"
+                  />
                 </div>
               </div>
               <hlm-radio-group
                 class="grid-cols-1 gap-0 divide-y"
                 [value]="keptVersion.track.position"
-                [disabled]="all"
+                [disabled]="all || removal.locked()"
                 (valueChange)="keep(key, $event)"
                 [attr.aria-label]="'Version à garder de ' + group[0].track.name"
               >
@@ -119,7 +117,7 @@ import { defaultKept, minutes, removedByDefault } from './version-picks';
                     </hlm-radio>
                     <hlm-checkbox
                       [aria-label]="'Retirer ' + track.name + ', ' + track.albumName"
-                      [disabled]="isKept"
+                      [disabled]="isKept || removal.locked()"
                       [checked]="isChecked"
                       (checkedChange)="override(track.position, $event)"
                     />
@@ -180,7 +178,6 @@ export class DuplicatesPage {
 
   protected readonly minutes = minutes;
   protected readonly others = signal(false);
-  protected readonly outcome = signal<string | null>(null);
 
   /** Version gardée de chaque groupe (clé : position du premier titre), choisie à la main. */
   private readonly kept = linkedSignal<SongVersion[][], ReadonlyMap<number, number>>({
@@ -211,6 +208,11 @@ export class DuplicatesPage {
         .map((version) => version.track.position);
     }),
   );
+
+  protected readonly removal = removal({
+    targets: () => [{ id: this.id(), name: this.playlist.value()?.name ?? '', positions: this.selected() }],
+    sources: [this.playlist, this.versions],
+  });
 
   protected keptOf(group: SongVersion[]): SongVersion {
     const position = this.kept().get(group[0].track.position) ?? defaultKept(group);
@@ -248,11 +250,5 @@ export class DuplicatesPage {
 
   protected override(position: number, removed: boolean): void {
     this.overrides.update((overrides) => new Map(overrides).set(position, removed));
-  }
-
-  protected removed(message: string): void {
-    this.outcome.set(message);
-    this.playlist.reload();
-    this.versions.reload();
   }
 }

@@ -1,8 +1,6 @@
 import { DecimalPipe, Location, PercentPipe } from '@angular/common';
 import { Component, computed, effect, inject, input, linkedSignal, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-import { concatMap, from } from 'rxjs';
-import { HlmAlertDialogImports } from '@spartan-ng/helm/alert-dialog';
 import { HlmBadgeImports } from '@spartan-ng/helm/badge';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmCheckboxImports } from '@spartan-ng/helm/checkbox';
@@ -12,6 +10,8 @@ import { SkipFilter, SkippedSong } from '../../core/models';
 import { paged } from '../../core/paged';
 import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview, trackArtwork } from '../../core/track-preview';
+import { RemovalTarget, removal } from './removal';
+import { RemovalOutcome, RemoveTracks } from './remove-tracks';
 import { SincePipe } from './since';
 import { SkipFilterPanel } from './skip-filter-panel';
 import { skipFilterOf, skipParamsOf } from './skip-filter';
@@ -31,11 +31,12 @@ const OFTEN = 3;
     DecimalPipe,
     PercentPipe,
     RouterLink,
-    HlmAlertDialogImports,
     HlmBadgeImports,
     HlmButtonImports,
     HlmCheckboxImports,
     HlmSkeletonImports,
+    RemovalOutcome,
+    RemoveTracks,
     SincePipe,
     SkipFilterPanel,
     TrackPreview,
@@ -61,11 +62,7 @@ const OFTEN = 3;
 
     <app-skip-filter-panel class="mb-6" [(filter)]="filter" />
 
-    @if (outcome(); as message) {
-      <p class="bg-muted mb-6 rounded-lg px-4 py-3 text-sm" role="status">
-        {{ message }} <a routerLink="/journal" class="underline">Voir le journal</a>
-      </p>
-    }
+    <app-removal-outcome [removal]="removal" />
 
     @if (songs.isLoading() && !songs.items().length) {
       <div hlmSkeleton class="h-96 rounded-xl"></div>
@@ -77,38 +74,13 @@ const OFTEN = 3;
       >
         <p class="text-sm" role="status">
           <strong>{{ checkedSongs() | number }}</strong> morceaux sélectionnés
-          @if (positions()) {
+          @if (removal.count()) {
             <span class="text-muted-foreground">
-              ({{ positions() | number }} titres dans {{ targets().length | number }} playlists)
+              ({{ removal.count() | number }} titres dans {{ removal.targets().length | number }} playlists)
             </span>
           }
         </p>
-        <hlm-alert-dialog>
-          <button
-            hlmAlertDialogTrigger
-            hlmBtn
-            size="sm"
-            variant="destructive"
-            [disabled]="!positions() || removing() || stale()"
-          >
-            {{ removing() ? 'Retrait en cours…' : 'Retirer ' + (positions() | number) + ' titres' }}
-          </button>
-          <hlm-alert-dialog-content *hlmAlertDialogPortal="let ctx">
-            <hlm-alert-dialog-header>
-              <h2 hlmAlertDialogTitle>
-                Retirer {{ positions() | number }} titres de {{ targets().length | number }} playlists ?
-              </h2>
-              <p hlmAlertDialogDescription>
-                {{ playlistNames() }}. Ils sont d'abord copiés dans ta playlist « Spotylist · Corbeille », et notés
-                dans le journal : tu pourras les remettre en place.
-              </p>
-            </hlm-alert-dialog-header>
-            <hlm-alert-dialog-footer>
-              <button hlmAlertDialogCancel variant="outline">Annuler</button>
-              <button hlmAlertDialogAction variant="destructive" (click)="ctx.close(); remove()">Retirer</button>
-            </hlm-alert-dialog-footer>
-          </hlm-alert-dialog-content>
-        </hlm-alert-dialog>
+        <app-remove-tracks [removal]="removal" />
       </div>
 
       <ul class="bg-card divide-y rounded-xl border transition-opacity" [class.opacity-60]="songs.isLoading()">
@@ -117,7 +89,7 @@ const OFTEN = 3;
           <li class="flex items-center gap-3 px-4 py-2" [class.bg-destructive/10]="checked">
             <hlm-checkbox
               [aria-label]="'Retirer ' + song.name + ' de ses playlists'"
-              [disabled]="removing() || stale()"
+              [disabled]="removal.locked()"
               [checked]="checked"
               (checkedChange)="toggle(song.id, $event)"
             />
@@ -198,42 +170,30 @@ export class SkippedPage {
 
   /** Morceaux cochés, par id. */
   protected readonly selected = signal<ReadonlySet<string>>(new Set());
-  protected readonly removing = signal(false);
-  protected readonly outcome = signal<string | null>(null);
-
-  /** Vrai après un retrait, jusqu'à la relecture de la liste : les positions ont changé. */
-  protected readonly stale = linkedSignal({ source: this.songs.items, computation: () => false });
-
-  /** Titres à retirer, par playlist. */
-  protected readonly targets = computed(() => {
-    const byPlaylist = new Map<string, { id: string; name: string; positions: number[] }>();
-    for (const song of this.songs.items()) {
-      if (!this.selected().has(song.id)) {
-        continue;
-      }
-      for (const playlist of song.playlists) {
-        const target = byPlaylist.get(playlist.id) ?? { ...playlist, positions: [] };
-        target.positions.push(...playlist.positions);
-        byPlaylist.set(playlist.id, target);
-      }
-    }
-    return [...byPlaylist.values()];
-  });
 
   /** Morceaux cochés parmi ceux affichés : un changement de seuils peut en cacher. */
   protected readonly checkedSongs = computed(
     () => this.songs.items().filter((song) => this.selected().has(song.id)).length,
   );
 
-  protected readonly positions = computed(() =>
-    this.targets().reduce((total, target) => total + target.positions.length, 0),
-  );
-
-  protected readonly playlistNames = computed(() =>
-    this.targets()
-      .map((target) => `« ${target.name} »`)
-      .join(', '),
-  );
+  /** Titres des morceaux cochés, par playlist. */
+  protected readonly removal = removal({
+    targets: () => {
+      const byPlaylist = new Map<string, RemovalTarget>();
+      for (const song of this.songs.items()) {
+        if (!this.selected().has(song.id)) {
+          continue;
+        }
+        for (const playlist of song.playlists) {
+          const target = byPlaylist.get(playlist.id) ?? { ...playlist, positions: [] };
+          target.positions.push(...playlist.positions);
+          byPlaylist.set(playlist.id, target);
+        }
+      }
+      return [...byPlaylist.values()];
+    },
+    sources: [this.songs],
+  });
 
   constructor() {
     // Seuils dans l'URL, sans navigation : glisser un curseur ne recharge que la liste
@@ -254,27 +214,5 @@ export class SkippedPage {
       }
       return next;
     });
-  }
-
-  /** Une playlist après l'autre : chaque retrait décale les positions de sa seule playlist. */
-  protected remove(): void {
-    this.removing.set(true);
-    let removed = 0;
-    from(this.targets())
-      .pipe(concatMap((target) => this.api.remove(target.id, target.positions)))
-      .subscribe({
-        next: (result) => (removed += result.removed),
-        complete: () =>
-          this.done(`${removed} titre${removed > 1 ? 's' : ''} retiré${removed > 1 ? 's' : ''}, et mis dans la corbeille.`),
-        error: () => this.done("Le retrait s'est interrompu : les titres déjà retirés sont dans la corbeille."),
-      });
-  }
-
-  private done(message: string): void {
-    this.removing.set(false);
-    this.selected.set(new Set());
-    this.outcome.set(message);
-    this.stale.set(true);
-    this.songs.reload();
   }
 }

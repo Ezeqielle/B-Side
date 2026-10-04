@@ -1,11 +1,10 @@
-import { formatDate } from '@angular/common';
-import { Component, LOCALE_ID, computed, inject, linkedSignal, signal } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
 import { HlmSkeletonImports } from '@spartan-ng/helm/skeleton';
 import { HlmTabsImports } from '@spartan-ng/helm/tabs';
 import { apiResource } from '../../core/api-resource';
-import { CreatePlaylist, CreatedPlaylist, PlaylistCreated } from '../../core/create-playlist';
+import { CreatePlaylist } from '../../core/create-playlist';
 import { TimeRange, Track } from '../../core/models';
 import { paged } from '../../core/paged';
 import { StatsApi } from '../../core/stats-api';
@@ -26,7 +25,6 @@ const LIMIT = 50;
     HlmTabsImports,
     HlmSkeletonImports,
     CreatePlaylist,
-    PlaylistCreated,
     TrackCard,
   ],
   template: `
@@ -50,18 +48,10 @@ const LIMIT = 50;
           </hlm-tabs-list>
         </hlm-tabs>
         @if (top.items().length) {
-          <app-create-playlist
-            [trackIds]="trackIds()"
-            [defaultName]="playlistName()"
-            (done)="created.set($event)"
-          />
+          <app-create-playlist [trackIds]="trackIds()" [namePrefix]="playlistName()" />
         }
       </div>
     </div>
-
-    @if (created() !== undefined) {
-      <app-playlist-created class="mb-6 block" [playlist]="created()" />
-    }
 
     @if (top.error() && !top.items().length) {
       <p class="text-destructive" role="alert">Impossible de récupérer tes tops pour le moment.</p>
@@ -157,16 +147,10 @@ export class TopTracksPage {
 
   protected readonly trackIds = computed(() => this.top.items().map((track) => track.id));
 
-  private readonly locale = inject(LOCALE_ID);
-  /** Nom proposé : « Top 4 semaines · 3 oct. 2026 ». */
+  /** Nom proposé : « Top 4 semaines ». */
   protected readonly playlistName = computed(() => {
     const label = this.ranges.find((option) => option.value === this.range())?.label ?? '';
-    return `Top ${label.toLowerCase()} · ${formatDate(Date.now(), 'd MMM y', this.locale)}`;
-  });
-  /** Dernière playlist créée, `null` si la création a échoué. Oubliée au changement de période. */
-  protected readonly created = linkedSignal<Range, CreatedPlaylist | null | undefined>({
-    source: this.range,
-    computation: () => undefined,
+    return `Top ${label.toLowerCase()}`;
   });
 
   private readonly trackStats = inject(TrackStats);

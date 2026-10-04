@@ -39,6 +39,9 @@ Tables :
 
 `GET /api/stats/{overview,tracks,artists,timeline,clock}`, calculées en SQL par `App\Stats\PlayStats` sur les écoutes importées.
 
+- Le morceau est défini dans `App\Stats\Songs`, partagé par `PlayStats`, `SongStats` et `PlaylistStats` : un même morceau est reconnu à son nom et à son artiste, sans la casse (clé `Songs::key()`), et une écoute ne compte qu'au-delà de 30 s (`Songs::PLAYS`). `Songs::with()` fournit les ensembles `listened` (écoutes par morceau) et `playlist_songs` (morceaux des playlists lisibles, `copies` hors likes et `liked`). Les artistes sont aussi comptés et regroupés sans la casse.
+- La clé d'un titre est fixée par la première source qui l'écrit : `TrackRepository` ne met jamais à jour `name` ni `artist_name` (`ON CONFLICT`).
+
 - Toutes acceptent un `App\Stats\PlayFilter` en query string : `from`, `to` (jours inclus), `artist`, `tz` (fuseau du navigateur, pour les périodes et les heures). Ce même filtre servira à créer des playlists.
 - Une écoute ne compte qu'au-delà de 30 secondes, comme chez Spotify. Temps d'écoute et taux d'écoutes passées prennent tout en compte.
 - Côté front, le filtre est dans l'URL (`/stats?year=2021&artist=…`) : chaque vue le modifie par un simple lien.

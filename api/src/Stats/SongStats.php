@@ -10,18 +10,15 @@ use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Query\QueryBuilder;
 
 /**
- * Historique d'un morceau (Listening::song()) : ses écoutes depuis toujours, son like et ses playlists.
+ * Historique d'un morceau (Songs) : ses écoutes depuis toujours, son like et ses playlists.
  */
 final readonly class SongStats
 {
-    private const string PLAYS = 'COUNT(*) FILTER (WHERE ' . Listening::COUNTS . ')';
     private const string LOCAL_TIME = 'p.played_at AT TIME ZONE :tz';
-    /** Titre (alias t) de ce morceau. */
-    private const string SAME_SONG = '(lower(t.name), lower(t.artist_name)) = (lower(:name), lower(:artist))';
 
     public function __construct(
         private Connection $connection,
-        private Listening $listening,
+        private Songs $songs,
         private TrackRepository $tracks,
         private SpotifyCatalog $catalog,
     ) {
@@ -48,10 +45,10 @@ final readonly class SongStats
         /** @var array{plays: int, ms_played: int, first_played_at: ?string, last_played_at: ?string} $totals */
         $totals = $this->plays($user, $name, $artist, $tz)
             ->select(
-                self::PLAYS . ' AS plays',
+                Songs::PLAYS . ' AS plays',
                 'COALESCE(SUM(p.ms_played), 0) AS ms_played',
-                'MIN(p.played_at) FILTER (WHERE ' . Listening::COUNTS . ') AS first_played_at',
-                'MAX(p.played_at) FILTER (WHERE ' . Listening::COUNTS . ') AS last_played_at',
+                Songs::counted('MIN(p.played_at)') . ' AS first_played_at',
+                Songs::counted('MAX(p.played_at)') . ' AS last_played_at',
             )
             ->fetchAssociative();
 
@@ -59,11 +56,11 @@ final readonly class SongStats
         $months = $this->plays($user, $name, $artist, $tz)
             ->select(
                 'to_char(' . self::LOCAL_TIME . ", 'YYYY-MM') AS month",
-                self::PLAYS . ' AS plays',
+                Songs::PLAYS . ' AS plays',
                 'COALESCE(SUM(p.ms_played), 0) AS ms_played',
             )
             ->groupBy('month')
-            ->having(self::PLAYS . ' > 0')
+            ->having(Songs::PLAYS . ' > 0')
             ->orderBy('month')
             ->fetchAllAssociative();
 
@@ -74,7 +71,7 @@ final readonly class SongStats
             FROM playlist pl
             INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
             INNER JOIN track t ON t.id = pt.track_id
-            WHERE pl.user_id = :user AND pl.spotify_id = :liked AND ' . self::SAME_SONG, $params + ['liked' => Playlist::LIKED]);
+            WHERE pl.user_id = :user AND pl.spotify_id = :liked AND ' . Songs::isSong('t'), $params + ['liked' => Playlist::LIKED]);
 
         /** @var list<array{spotify_id: string, name: string, image_url: ?string}> $playlists */
         $playlists = $this->connection->fetchAllAssociative('
@@ -84,7 +81,7 @@ final readonly class SongStats
                 SELECT 1
                 FROM playlist_track pt
                 INNER JOIN track t ON t.id = pt.track_id
-                WHERE pt.playlist_id = pl.id AND ' . self::SAME_SONG . '
+                WHERE pt.playlist_id = pl.id AND ' . Songs::isSong('t') . '
             )
             ORDER BY lower(pl.name)', $params + ['liked' => Playlist::LIKED]);
 
@@ -116,8 +113,8 @@ final readonly class SongStats
      */
     private function plays(User $user, string $name, string $artist, string $tz): QueryBuilder
     {
-        return $this->listening->plays($user, new PlayFilter(tz: $tz))
-            ->andWhere(self::SAME_SONG)
+        return $this->songs->plays($user, new PlayFilter(tz: $tz))
+            ->andWhere(Songs::isSong('t'))
             ->setParameter('name', $name)
             ->setParameter('artist', $artist);
     }
@@ -130,8 +127,8 @@ final readonly class SongStats
         $value = $this->plays($user, $name, $artist, $tz)
             ->select('EXTRACT(' . $field . ' FROM ' . self::LOCAL_TIME . ') AS slot')
             ->groupBy('slot')
-            ->having(self::PLAYS . ' > 0')
-            ->orderBy(self::PLAYS, 'DESC')
+            ->having(Songs::PLAYS . ' > 0')
+            ->orderBy(Songs::PLAYS, 'DESC')
             ->addOrderBy('slot')
             ->setMaxResults(1)
             ->fetchOne();

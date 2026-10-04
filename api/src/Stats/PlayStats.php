@@ -10,24 +10,23 @@ use Doctrine\DBAL\Query\QueryBuilder;
  */
 final readonly class PlayStats
 {
-    private const string PLAYS = 'COUNT(*) FILTER (WHERE ' . Listening::COUNTS . ')';
     private const string MS_PLAYED = 'COALESCE(SUM(p.ms_played), 0)';
     private const string SKIP_RATE = 'COALESCE(AVG(p.skipped::int), 0)';
     private const string LOCAL_TIME = 'p.played_at AT TIME ZONE :tz';
 
-    public function __construct(private Listening $listening)
+    public function __construct(private Songs $songs)
     {
     }
 
     public function overview(User $user, PlayFilter $filter): Overview
     {
         /** @var array{plays: int, ms_played: int, tracks: int, artists: int, skip_rate: string} $row */
-        $row = $this->listening->plays($user, $filter)
+        $row = $this->songs->plays($user, $filter)
             ->select(
-                self::PLAYS . ' AS plays',
+                Songs::PLAYS . ' AS plays',
                 self::MS_PLAYED . ' AS ms_played',
                 'COUNT(DISTINCT p.track_id) AS tracks',
-                'COUNT(DISTINCT t.artist_name) AS artists',
+                'COUNT(DISTINCT lower(t.artist_name)) AS artists',
                 self::SKIP_RATE . ' AS skip_rate',
             )
             ->fetchAssociative();
@@ -46,7 +45,7 @@ final readonly class PlayStats
      */
     public function topTracks(User $user, PlayFilter $filter, int $limit, int $offset = 0): array
     {
-        return $this->rankTracks($this->listening->plays($user, $filter), $limit, $offset);
+        return $this->rankTracks($this->songs->plays($user, $filter), $limit, $offset);
     }
 
     /**
@@ -56,17 +55,7 @@ final readonly class PlayStats
      */
     public function topTracksOutsidePlaylists(User $user, PlayFilter $filter, int $limit): array
     {
-        $query = $this->listening->plays($user, $filter)->andWhere('
-            NOT EXISTS (
-                SELECT 1
-                FROM playlist pl
-                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
-                INNER JOIN track pt_t ON pt_t.id = pt.track_id
-                WHERE pl.user_id = p.user_id AND pl.readable AND ' . Listening::sameSong('pt_t', 't') . '
-            )
-            ');
-
-        return $this->rankTracks($query, $limit);
+        return $this->rankTracks($this->songs->plays($user, $filter)->andWhere('NOT ' . Songs::inPlaylists('t')), $limit);
     }
 
     /**
@@ -75,15 +64,15 @@ final readonly class PlayStats
     public function topArtists(User $user, PlayFilter $filter, int $limit): array
     {
         /** @var list<array{artist_name: string, plays: int, ms_played: int, tracks: int}> $rows */
-        $rows = $this->listening->plays($user, $filter)
+        $rows = $this->songs->plays($user, $filter)
             ->select(
-                't.artist_name',
-                self::PLAYS . ' AS plays',
+                'MIN(t.artist_name) AS artist_name',
+                Songs::PLAYS . ' AS plays',
                 self::MS_PLAYED . ' AS ms_played',
                 'COUNT(DISTINCT p.track_id) AS tracks',
             )
-            ->groupBy('t.artist_name')
-            ->having(self::PLAYS . ' > 0')
+            ->groupBy('lower(t.artist_name)')
+            ->having(Songs::PLAYS . ' > 0')
             ->orderBy('plays', 'DESC')
             ->addOrderBy('ms_played', 'DESC')
             ->setMaxResults($limit)
@@ -105,10 +94,10 @@ final readonly class PlayStats
     public function timeline(User $user, PlayFilter $filter): array
     {
         /** @var list<array{month: string, plays: int, ms_played: int}> $rows */
-        $rows = $this->listening->plays($user, $filter)
+        $rows = $this->songs->plays($user, $filter)
             ->select(
                 'to_char(' . self::LOCAL_TIME . ", 'YYYY-MM') AS month",
-                self::PLAYS . ' AS plays',
+                Songs::PLAYS . ' AS plays',
                 self::MS_PLAYED . ' AS ms_played',
             )
             ->groupBy('month')
@@ -130,11 +119,11 @@ final readonly class PlayStats
     public function clock(User $user, PlayFilter $filter): array
     {
         /** @var list<array{weekday: string, hour: string, plays: int}> $rows */
-        $rows = $this->listening->plays($user, $filter)
+        $rows = $this->songs->plays($user, $filter)
             ->select(
                 'EXTRACT(ISODOW FROM ' . self::LOCAL_TIME . ') AS weekday',
                 'EXTRACT(HOUR FROM ' . self::LOCAL_TIME . ') AS hour',
-                self::PLAYS . ' AS plays',
+                Songs::PLAYS . ' AS plays',
             )
             ->groupBy('weekday', 'hour')
             ->fetchAllAssociative();
@@ -161,13 +150,13 @@ final readonly class PlayStats
                 't.artist_name',
                 't.album_name',
                 't.image_url',
-                self::PLAYS . ' AS plays',
+                Songs::PLAYS . ' AS plays',
                 self::MS_PLAYED . ' AS ms_played',
                 self::SKIP_RATE . ' AS skip_rate',
                 'MAX(p.played_at) AS last_played_at',
             )
             ->groupBy('t.id')
-            ->having(self::PLAYS . ' > 0')
+            ->having(Songs::PLAYS . ' > 0')
             ->orderBy('plays', 'DESC')
             ->addOrderBy('ms_played', 'DESC')
             ->addOrderBy('t.id')

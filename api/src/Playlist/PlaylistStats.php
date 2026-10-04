@@ -4,13 +4,13 @@ namespace App\Playlist;
 
 use App\Entity\Playlist;
 use App\Entity\User;
-use App\Stats\Listening;
 use App\Stats\PlayFilter;
+use App\Stats\Songs;
 use Doctrine\DBAL\Connection;
 
 /**
  * Statistiques des playlists, croisées avec les écoutes d'un PlayFilter. Titres de playlist et écoutes
- * sont rapprochés par morceau (Listening::song()).
+ * sont rapprochés par morceau (Songs).
  *
  * Les titres likés (Playlist::LIKED) comptent comme une playlist, sauf dans le nombre de playlists et pour
  * les doublons : sinon, chaque titre liké rangé dans une playlist serait un doublon.
@@ -25,7 +25,7 @@ final readonly class PlaylistStats
 
     public function __construct(
         private Connection $connection,
-        private Listening $listening,
+        private Songs $songs,
     ) {
     }
 
@@ -38,20 +38,12 @@ final readonly class PlaylistStats
             WHERE user_id = :user AND ' . self::NOT_LIKED, ['user' => $user->getId()]);
 
         /** @var array{tracks: int, never_played: int, duplicates: int} $songs */
-        $songs = $this->withListened($user, $filter, '
-            , songs (name, artist, copies) AS (
-                SELECT ' . Listening::song('t') . ', COUNT(*) FILTER (WHERE ' . self::NOT_LIKED . ') AS copies
-                FROM playlist pl
-                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
-                INNER JOIN track t ON t.id = pt.track_id
-                WHERE pl.user_id = :user AND pl.readable
-                GROUP BY 1, 2
-            )
+        $songs = $this->songs->with($user, $filter, '
             SELECT COUNT(*) AS tracks,
                 COUNT(*) FILTER (WHERE ' . self::NEVER_PLAYED . ') AS never_played,
                 COUNT(*) FILTER (WHERE s.copies > 1) AS duplicates
-            FROM songs s
-            LEFT JOIN listened l ON (l.name, l.artist) = (s.name, s.artist)
+            FROM playlist_songs s
+            LEFT JOIN listened l USING (name, artist)
             ')[0];
 
         return new PlaylistOverview(
@@ -90,7 +82,7 @@ final readonly class PlaylistStats
     public function tracks(Playlist $playlist, PlayFilter $filter): array
     {
         /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, image_url: ?string, album_type: ?string, album_tracks: ?int, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
-        $rows = $this->withListened($playlist->getUser(), $filter, '
+        $rows = $this->songs->with($playlist->getUser(), $filter, '
             SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, t.image_url, t.album_type, t.album_tracks,
                 pt.added_at,
                 COALESCE(l.plays, 0) AS plays,
@@ -99,7 +91,7 @@ final readonly class PlaylistStats
                 l.last_played_at
             FROM playlist_track pt
             INNER JOIN track t ON t.id = pt.track_id
-            LEFT JOIN listened l ON (l.name, l.artist) = (' . Listening::song('t') . ')
+            LEFT JOIN listened l ON (l.name, l.artist) = (' . Songs::key('t') . ')
             WHERE pt.playlist_id = :playlist
             ORDER BY pt.position
             ', ['playlist' => $playlist->getId()]);
@@ -148,7 +140,7 @@ final readonly class PlaylistStats
             INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
             INNER JOIN track t ON t.id = pt.track_id
             WHERE pl.user_id = :user AND pl.readable AND ' . self::NOT_LIKED . '
-            GROUP BY ' . Listening::song('t') . '
+            GROUP BY ' . Songs::key('t') . '
             HAVING COUNT(*) > 1
             ORDER BY COUNT(*) DESC, lower(MIN(t.name))
             LIMIT :limit
@@ -171,23 +163,16 @@ final readonly class PlaylistStats
      */
     public function skippedSongs(User $user, SkipFilter $filter, int $limit, int $offset): array
     {
-        $skipped = $this->listening->plays($user, new PlayFilter())
+        $skipped = $this->songs->plays($user, new PlayFilter())
             ->select(
-                'lower(t.name) AS name',
-                'lower(t.artist_name) AS artist',
+                Songs::keyColumns('t'),
                 '(array_agg(t.id ORDER BY p.played_at DESC) FILTER (WHERE p.skipped))[1] AS id',
                 '(array_agg(t.image_url ORDER BY p.played_at DESC) FILTER (WHERE t.image_url IS NOT NULL))[1] AS image_url',
                 'MAX(p.played_at) FILTER (WHERE p.skipped) AS skipped_at',
                 'COUNT(*) FILTER (WHERE p.skipped) AS skips',
                 'COUNT(*) AS starts',
             )
-            ->andWhere('(' . Listening::song('t') . ') IN (
-                SELECT ' . Listening::song('pt_t') . '
-                FROM playlist pl
-                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
-                INNER JOIN track pt_t ON pt_t.id = pt.track_id
-                WHERE pl.user_id = p.user_id AND pl.readable
-            )')
+            ->andWhere(Songs::inPlaylists('t'))
             ->groupBy('1', '2')
             ->having('COUNT(*) FILTER (WHERE p.skipped) >= :min_skips')
             ->setParameter('min_skips', $filter->minSkips ?? 1)
@@ -206,12 +191,12 @@ final readonly class PlaylistStats
         $rows = $this->connection->fetchAllAssociative('
             WITH skipped AS (' . $skipped->getSQL() . '),
             copies AS (
-                SELECT lower(t.name) AS name, lower(t.artist_name) AS artist, pl.spotify_id AS id, pl.name AS playlist_name,
+                SELECT ' . Songs::keyColumns('t') . ', pl.spotify_id AS id, pl.name AS playlist_name,
                     json_agg(json_build_object(\'position\', pt.position, \'id\', t.id) ORDER BY pt.position) AS tracks
                 FROM playlist pl
                 INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
                 INNER JOIN track t ON t.id = pt.track_id
-                WHERE pl.user_id = :user AND pl.readable AND (' . Listening::song('t') . ') IN (SELECT name, artist FROM skipped)
+                WHERE pl.user_id = :user AND pl.readable AND (' . Songs::key('t') . ') IN (SELECT name, artist FROM skipped)
                 GROUP BY 1, 2, pl.id
             )
             SELECT s.id, t.name, t.artist_name, s.image_url, s.skipped_at, s.skips, s.starts,
@@ -243,7 +228,7 @@ final readonly class PlaylistStats
     private function findPlaylists(User $user, PlayFilter $filter, ?string $id = null): array
     {
         /** @var list<array{id: string, name: string, owner_name: string, image_url: ?string, tracks: int, artists: int, duration_ms: int, never_played: int, skip_rate: float, last_played_at: ?string, last_added_at: ?string}> $rows */
-        $rows = $this->withListened($user, $filter, '
+        $rows = $this->songs->with($user, $filter, '
             SELECT pl.spotify_id AS id, pl.name, pl.owner_name, pl.image_url,
                 COUNT(t.id) AS tracks,
                 COUNT(DISTINCT lower(t.artist_name)) AS artists,
@@ -255,7 +240,7 @@ final readonly class PlaylistStats
             FROM playlist pl
             LEFT JOIN playlist_track pt ON pt.playlist_id = pl.id
             LEFT JOIN track t ON t.id = pt.track_id
-            LEFT JOIN listened l ON (l.name, l.artist) = (' . Listening::song('t') . ')
+            LEFT JOIN listened l ON (l.name, l.artist) = (' . Songs::key('t') . ')
             WHERE pl.user_id = :user AND pl.readable' . (null === $id ? '' : ' AND pl.spotify_id = :id') . '
             GROUP BY pl.id
             ORDER BY lower(pl.name), pl.id
@@ -274,23 +259,6 @@ final readonly class PlaylistStats
             lastPlayedAt: self::date($row['last_played_at']),
             lastAddedAt: self::date($row['last_added_at']),
         ), $rows);
-    }
-
-    /**
-     * Exécute `$sql` précédé de la table `listened` : écoutes du filtre par morceau (Listening::bySong()).
-     *
-     * @param array<string, mixed> $params
-     *
-     * @return list<array<string, mixed>>
-     */
-    private function withListened(User $user, PlayFilter $filter, string $sql, array $params = []): array
-    {
-        $listened = $this->listening->bySong($user, $filter);
-
-        return $this->connection->fetchAllAssociative(
-            'WITH listened AS (' . $listened->getSQL() . ')' . $sql,
-            [...$listened->getParameters(), ...$params],
-        );
     }
 
     private static function date(?string $value): ?\DateTimeImmutable

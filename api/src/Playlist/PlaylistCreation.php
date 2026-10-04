@@ -5,7 +5,6 @@ namespace App\Playlist;
 use App\Entity\User;
 use App\Message\SyncPlaylists;
 use App\Spotify\SpotifyApi;
-use App\Stats\StatsCache;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
@@ -17,7 +16,6 @@ class PlaylistCreation
 
     public function __construct(
         private readonly SpotifyApi $spotify,
-        private readonly StatsCache $statsCache,
         private readonly MessageBusInterface $bus,
     ) {
     }
@@ -32,9 +30,8 @@ class PlaylistCreation
         $id = $this->spotify->createPlaylist($user, $name, self::DESCRIPTION);
         $this->spotify->addTracks($user, $id, $trackIds);
 
-        $userId = $user->getId() ?? throw new \LogicException('User not persisted.');
-        $this->statsCache->clear($userId);
-        $this->bus->dispatch(new SyncPlaylists($userId));
+        // Rien ne change en base avant la synchro, qui vide elle-même le cache des stats
+        $this->bus->dispatch(new SyncPlaylists($user->getId() ?? throw new \LogicException('User not persisted.')));
 
         return $id;
     }

@@ -6,7 +6,6 @@ use App\Entity\User;
 use App\History\StreamingHistoryParser;
 use App\Message\ImportPlays;
 use App\Repository\PlayRepository;
-use App\Stats\StatsCache;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -22,9 +21,9 @@ class HistoryController extends AbstractController
     private const int BATCH_SIZE = 1000;
 
     #[Route('', name: '', methods: ['GET'])]
-    public function summary(#[CurrentUser] User $user, PlayRepository $playRepository, StatsCache $cache): JsonResponse
+    public function summary(#[CurrentUser] User $user, PlayRepository $playRepository): JsonResponse
     {
-        return $this->json($cache->get($user, __METHOD__, [], static fn () => $playRepository->summarize($user)));
+        return $this->json($playRepository->summarize($user));
     }
 
     /**

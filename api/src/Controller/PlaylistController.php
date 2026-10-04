@@ -17,7 +17,6 @@ use App\Playlist\SkipFilter;
 use App\Repository\PlaylistRepository;
 use App\Stats\PlayFilter;
 use App\Stats\PlayStats;
-use App\Stats\StatsCache;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Response;
@@ -38,16 +37,14 @@ class PlaylistController extends AbstractController
     private const array LIMIT = ['min_range' => 1, 'max_range' => 100];
     private const array OFFSET = ['min_range' => 0];
 
-    public function __construct(
-        private readonly PlaylistStats $stats,
-        private readonly StatsCache $cache,
-    ) {
+    public function __construct(private readonly PlaylistStats $stats)
+    {
     }
 
     #[Route('', name: '', methods: ['GET'])]
     public function list(#[CurrentUser] User $user, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter], fn () => $this->stats->playlists($user, $filter)));
+        return $this->json($this->stats->playlists($user, $filter));
     }
 
     /**
@@ -65,7 +62,7 @@ class PlaylistController extends AbstractController
     #[Route('/overview', name: '_overview', methods: ['GET'])]
     public function overview(#[CurrentUser] User $user, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter], fn () => $this->stats->overview($user, $filter)));
+        return $this->json($this->stats->overview($user, $filter));
     }
 
     #[Route('/sync', name: '_sync', methods: ['POST'])]
@@ -81,7 +78,7 @@ class PlaylistController extends AbstractController
         #[CurrentUser] User $user,
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$limit], fn () => $this->stats->duplicates($user, $limit)));
+        return $this->json($this->stats->duplicates($user, $limit));
     }
 
     /**
@@ -94,7 +91,7 @@ class PlaylistController extends AbstractController
         #[MapQueryString] PlayFilter $filter = new PlayFilter(),
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit], static fn () => $playStats->topTracksOutsidePlaylists($user, $filter, $limit)));
+        return $this->json($playStats->topTracksOutsidePlaylists($user, $filter, $limit));
     }
 
     /**
@@ -108,15 +105,13 @@ class PlaylistController extends AbstractController
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
         #[MapQueryParameter(options: self::OFFSET)] int $offset = 0,
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit, $offset], fn () => $this->stats->skippedSongs($user, $filter, $limit, $offset)));
+        return $this->json($this->stats->skippedSongs($user, $filter, $limit, $offset));
     }
 
     #[Route('/{id}', name: '_show', methods: ['GET'])]
     public function show(#[CurrentUser] User $user, string $id, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
-        $playlist = $this->cache->get($user, __METHOD__, [$id, $filter], fn () => $this->stats->playlist($user, $id, $filter));
-
-        return $this->json($playlist ?? throw $this->createNotFoundException());
+        return $this->json($this->stats->playlist($user, $id, $filter) ?? throw $this->createNotFoundException());
     }
 
     #[Route('/{id}/tracks', name: '_tracks', methods: ['GET'])]
@@ -126,11 +121,9 @@ class PlaylistController extends AbstractController
         PlaylistRepository $playlistRepository,
         #[MapQueryString] PlayFilter $filter = new PlayFilter(),
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$id, $filter], function () use ($user, $id, $playlistRepository, $filter): array {
-            $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+        $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
 
-            return $this->stats->tracks($playlist, $filter);
-        }));
+        return $this->json($this->stats->tracks($playlist, $filter));
     }
 
     /**
@@ -139,11 +132,9 @@ class PlaylistController extends AbstractController
     #[Route('/{id}/versions', name: '_versions', methods: ['GET'])]
     public function versions(#[CurrentUser] User $user, string $id, PlaylistRepository $playlistRepository): JsonResponse
     {
-        return $this->json($this->cache->get($user, __METHOD__, [$id], function () use ($user, $id, $playlistRepository): array {
-            $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+        $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
 
-            return $this->stats->versions($playlist);
-        }));
+        return $this->json($this->stats->versions($playlist));
     }
 
     /**

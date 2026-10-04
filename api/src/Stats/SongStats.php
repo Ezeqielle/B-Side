@@ -19,6 +19,7 @@ final readonly class SongStats
     public function __construct(
         private Connection $connection,
         private Songs $songs,
+        private StatsCache $cache,
         private TrackRepository $tracks,
         private SpotifyCatalog $catalog,
     ) {
@@ -30,17 +31,19 @@ final readonly class SongStats
      */
     public function forTrack(User $user, string $trackId, string $tz): SongStat
     {
-        $track = $this->tracks->find($trackId);
-        if (null !== $track) {
-            return $this->song($user, $track->getName(), $track->getArtistName(), $tz);
-        }
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $trackId, $tz): SongStat {
+            $track = $this->tracks->find($trackId);
+            if (null !== $track) {
+                return $this->song($user, $track->getName(), $track->getArtistName(), $tz);
+            }
 
-        $track = $this->catalog->track($user, $trackId);
+            $track = $this->catalog->track($user, $trackId);
 
-        return $this->song($user, $track->name, $track->albumArtist, $tz);
+            return $this->song($user, $track->name, $track->albumArtist, $tz);
+        });
     }
 
-    public function song(User $user, string $name, string $artist, string $tz): SongStat
+    private function song(User $user, string $name, string $artist, string $tz): SongStat
     {
         /** @var array{plays: int, ms_played: int, first_played_at: ?string, last_played_at: ?string} $totals */
         $totals = $this->plays($user, $name, $artist, $tz)

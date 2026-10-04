@@ -6,6 +6,7 @@ use App\Entity\Playlist;
 use App\Entity\User;
 use App\Stats\PlayFilter;
 use App\Stats\Songs;
+use App\Stats\StatsCache;
 use Doctrine\DBAL\Connection;
 
 /**
@@ -26,34 +27,37 @@ final readonly class PlaylistStats
     public function __construct(
         private Connection $connection,
         private Songs $songs,
+        private StatsCache $cache,
     ) {
     }
 
     public function overview(User $user, PlayFilter $filter): PlaylistOverview
     {
-        /** @var array{readable: int, unreadable: int} $playlists */
-        $playlists = $this->connection->fetchAssociative('
-            SELECT COUNT(*) FILTER (WHERE readable) AS readable, COUNT(*) FILTER (WHERE NOT readable) AS unreadable
-            FROM playlist pl
-            WHERE user_id = :user AND ' . self::NOT_LIKED, ['user' => $user->getId()]);
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $filter): PlaylistOverview {
+            /** @var array{readable: int, unreadable: int} $playlists */
+            $playlists = $this->connection->fetchAssociative('
+                SELECT COUNT(*) FILTER (WHERE readable) AS readable, COUNT(*) FILTER (WHERE NOT readable) AS unreadable
+                FROM playlist pl
+                WHERE user_id = :user AND ' . self::NOT_LIKED, ['user' => $user->getId()]);
 
-        /** @var array{tracks: int, never_played: int, duplicates: int} $songs */
-        $songs = $this->songs->with($user, $filter, '
-            SELECT COUNT(*) AS tracks,
-                COUNT(*) FILTER (WHERE ' . self::NEVER_PLAYED . ') AS never_played,
-                COUNT(*) FILTER (WHERE s.copies > 1) AS duplicates
-            FROM playlist_songs s
-            LEFT JOIN listened l USING (name, artist)
-            ')[0];
+            /** @var array{tracks: int, never_played: int, duplicates: int} $songs */
+            $songs = $this->songs->with($user, $filter, '
+                SELECT COUNT(*) AS tracks,
+                    COUNT(*) FILTER (WHERE ' . self::NEVER_PLAYED . ') AS never_played,
+                    COUNT(*) FILTER (WHERE s.copies > 1) AS duplicates
+                FROM playlist_songs s
+                LEFT JOIN listened l USING (name, artist)
+                ')[0];
 
-        return new PlaylistOverview(
-            syncedAt: $user->getPlaylistsSyncedAt(),
-            playlists: $playlists['readable'],
-            unreadable: $playlists['unreadable'],
-            tracks: $songs['tracks'],
-            neverPlayed: $songs['never_played'],
-            duplicates: $songs['duplicates'],
-        );
+            return new PlaylistOverview(
+                syncedAt: $user->getPlaylistsSyncedAt(),
+                playlists: $playlists['readable'],
+                unreadable: $playlists['unreadable'],
+                tracks: $songs['tracks'],
+                neverPlayed: $songs['never_played'],
+                duplicates: $songs['duplicates'],
+            );
+        });
     }
 
     /**
@@ -63,7 +67,7 @@ final readonly class PlaylistStats
      */
     public function playlists(User $user, PlayFilter $filter): array
     {
-        return $this->findPlaylists($user, $filter);
+        return $this->cache->get($user, __METHOD__, \func_get_args(), fn (): array => $this->findPlaylists($user, $filter));
     }
 
     /**
@@ -71,7 +75,7 @@ final readonly class PlaylistStats
      */
     public function playlist(User $user, string $id, PlayFilter $filter): ?PlaylistStat
     {
-        return $this->findPlaylists($user, $filter, $id)[0] ?? null;
+        return $this->cache->get($user, __METHOD__, \func_get_args(), fn (): ?PlaylistStat => $this->findPlaylists($user, $filter, $id)[0] ?? null);
     }
 
     /**
@@ -81,37 +85,39 @@ final readonly class PlaylistStats
      */
     public function tracks(Playlist $playlist, PlayFilter $filter): array
     {
-        /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, image_url: ?string, album_type: ?string, album_tracks: ?int, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
-        $rows = $this->songs->with($playlist->getUser(), $filter, '
-            SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, t.image_url, t.album_type, t.album_tracks,
-                pt.added_at,
-                COALESCE(l.plays, 0) AS plays,
-                COALESCE(l.starts, 0) AS starts,
-                COALESCE(l.skips::float / NULLIF(l.starts, 0), 0) AS skip_rate,
-                l.last_played_at
-            FROM playlist_track pt
-            INNER JOIN track t ON t.id = pt.track_id
-            LEFT JOIN listened l ON (l.name, l.artist) = (' . Songs::key('t') . ')
-            WHERE pt.playlist_id = :playlist
-            ORDER BY pt.position
-            ', ['playlist' => $playlist->getId()]);
+        return $this->cache->get($playlist->getUser(), __METHOD__, \func_get_args(), function () use ($playlist, $filter): array {
+            /** @var list<array{position: int, id: string, name: string, artist_name: string, album_name: string, duration_ms: ?int, image_url: ?string, album_type: ?string, album_tracks: ?int, added_at: ?string, plays: int, starts: int, skip_rate: float, last_played_at: ?string}> $rows */
+            $rows = $this->songs->with($playlist->getUser(), $filter, '
+                SELECT pt.position, t.id, t.name, t.artist_name, t.album_name, t.duration_ms, t.image_url, t.album_type, t.album_tracks,
+                    pt.added_at,
+                    COALESCE(l.plays, 0) AS plays,
+                    COALESCE(l.starts, 0) AS starts,
+                    COALESCE(l.skips::float / NULLIF(l.starts, 0), 0) AS skip_rate,
+                    l.last_played_at
+                FROM playlist_track pt
+                INNER JOIN track t ON t.id = pt.track_id
+                LEFT JOIN listened l ON (l.name, l.artist) = (' . Songs::key('t') . ')
+                WHERE pt.playlist_id = :playlist
+                ORDER BY pt.position
+                ', ['playlist' => $playlist->getId()]);
 
-        return array_map(static fn (array $row): PlaylistTrackStat => new PlaylistTrackStat(
-            position: $row['position'],
-            id: $row['id'],
-            name: $row['name'],
-            artistName: $row['artist_name'],
-            albumName: $row['album_name'],
-            durationMs: $row['duration_ms'],
-            imageUrl: $row['image_url'],
-            albumType: $row['album_type'],
-            albumTracks: $row['album_tracks'],
-            addedAt: self::date($row['added_at']),
-            plays: $row['plays'],
-            starts: $row['starts'],
-            skipRate: (float) $row['skip_rate'],
-            lastPlayedAt: self::date($row['last_played_at']),
-        ), $rows);
+            return array_map(static fn (array $row): PlaylistTrackStat => new PlaylistTrackStat(
+                position: $row['position'],
+                id: $row['id'],
+                name: $row['name'],
+                artistName: $row['artist_name'],
+                albumName: $row['album_name'],
+                durationMs: $row['duration_ms'],
+                imageUrl: $row['image_url'],
+                albumType: $row['album_type'],
+                albumTracks: $row['album_tracks'],
+                addedAt: self::date($row['added_at']),
+                plays: $row['plays'],
+                starts: $row['starts'],
+                skipRate: (float) $row['skip_rate'],
+                lastPlayedAt: self::date($row['last_played_at']),
+            ), $rows);
+        });
     }
 
     /**
@@ -121,7 +127,7 @@ final readonly class PlaylistStats
      */
     public function versions(Playlist $playlist): array
     {
-        return SongVersions::group($this->tracks($playlist, new PlayFilter()));
+        return $this->cache->get($playlist->getUser(), __METHOD__, \func_get_args(), fn (): array => SongVersions::group($this->tracks($playlist, new PlayFilter())));
     }
 
     /**
@@ -131,28 +137,30 @@ final readonly class PlaylistStats
      */
     public function duplicates(User $user, int $limit): array
     {
-        /** @var list<array{id: string, name: string, artist_name: string, image_url: ?string, playlists: string}> $rows */
-        $rows = $this->connection->fetchAllAssociative('
-            SELECT MIN(t.id) AS id, MIN(t.name) AS name, MIN(t.artist_name) AS artist_name,
-                (array_agg(t.image_url ORDER BY t.id))[1] AS image_url,
-                array_to_json(array_agg(pl.name ORDER BY lower(pl.name))) AS playlists
-            FROM playlist pl
-            INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
-            INNER JOIN track t ON t.id = pt.track_id
-            WHERE pl.user_id = :user AND pl.readable AND ' . self::NOT_LIKED . '
-            GROUP BY ' . Songs::key('t') . '
-            HAVING COUNT(*) > 1
-            ORDER BY COUNT(*) DESC, lower(MIN(t.name))
-            LIMIT :limit
-            ', ['user' => $user->getId(), 'limit' => $limit]);
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $limit): array {
+            /** @var list<array{id: string, name: string, artist_name: string, image_url: ?string, playlists: string}> $rows */
+            $rows = $this->connection->fetchAllAssociative('
+                SELECT MIN(t.id) AS id, MIN(t.name) AS name, MIN(t.artist_name) AS artist_name,
+                    (array_agg(t.image_url ORDER BY t.id))[1] AS image_url,
+                    array_to_json(array_agg(pl.name ORDER BY lower(pl.name))) AS playlists
+                FROM playlist pl
+                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
+                INNER JOIN track t ON t.id = pt.track_id
+                WHERE pl.user_id = :user AND pl.readable AND ' . self::NOT_LIKED . '
+                GROUP BY ' . Songs::key('t') . '
+                HAVING COUNT(*) > 1
+                ORDER BY COUNT(*) DESC, lower(MIN(t.name))
+                LIMIT :limit
+                ', ['user' => $user->getId(), 'limit' => $limit]);
 
-        return array_map(static fn (array $row): DuplicateTrack => new DuplicateTrack(
-            id: $row['id'],
-            name: $row['name'],
-            artistName: $row['artist_name'],
-            imageUrl: $row['image_url'],
-            playlists: json_decode($row['playlists'], true, flags: \JSON_THROW_ON_ERROR),
-        ), $rows);
+            return array_map(static fn (array $row): DuplicateTrack => new DuplicateTrack(
+                id: $row['id'],
+                name: $row['name'],
+                artistName: $row['artist_name'],
+                imageUrl: $row['image_url'],
+                playlists: json_decode($row['playlists'], true, flags: \JSON_THROW_ON_ERROR),
+            ), $rows);
+        });
     }
 
     /**
@@ -163,63 +171,65 @@ final readonly class PlaylistStats
      */
     public function skippedSongs(User $user, SkipFilter $filter, int $limit, int $offset): array
     {
-        $skipped = $this->songs->plays($user, new PlayFilter())
-            ->select(
-                Songs::keyColumns('t'),
-                '(array_agg(t.id ORDER BY p.played_at DESC) FILTER (WHERE p.skipped))[1] AS id',
-                '(array_agg(t.image_url ORDER BY p.played_at DESC) FILTER (WHERE t.image_url IS NOT NULL))[1] AS image_url',
-                'MAX(p.played_at) FILTER (WHERE p.skipped) AS skipped_at',
-                'COUNT(*) FILTER (WHERE p.skipped) AS skips',
-                'COUNT(*) AS starts',
-            )
-            ->andWhere(Songs::inPlaylists('t'))
-            ->groupBy('1', '2')
-            ->having('COUNT(*) FILTER (WHERE p.skipped) >= :min_skips')
-            ->setParameter('min_skips', $filter->minSkips ?? 1)
-            ->orderBy('skipped_at', 'DESC')
-            ->addOrderBy('1')
-            ->addOrderBy('2')
-            ->setMaxResults($limit)
-            ->setFirstResult($offset);
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $filter, $limit, $offset): array {
+            $skipped = $this->songs->plays($user, new PlayFilter())
+                ->select(
+                    Songs::keyColumns('t'),
+                    '(array_agg(t.id ORDER BY p.played_at DESC) FILTER (WHERE p.skipped))[1] AS id',
+                    '(array_agg(t.image_url ORDER BY p.played_at DESC) FILTER (WHERE t.image_url IS NOT NULL))[1] AS image_url',
+                    'MAX(p.played_at) FILTER (WHERE p.skipped) AS skipped_at',
+                    'COUNT(*) FILTER (WHERE p.skipped) AS skips',
+                    'COUNT(*) AS starts',
+                )
+                ->andWhere(Songs::inPlaylists('t'))
+                ->groupBy('1', '2')
+                ->having('COUNT(*) FILTER (WHERE p.skipped) >= :min_skips')
+                ->setParameter('min_skips', $filter->minSkips ?? 1)
+                ->orderBy('skipped_at', 'DESC')
+                ->addOrderBy('1')
+                ->addOrderBy('2')
+                ->setMaxResults($limit)
+                ->setFirstResult($offset);
 
-        if (null !== $filter->minRate) {
-            $skipped->andHaving('COUNT(*) FILTER (WHERE p.skipped) * 100 >= :min_rate * COUNT(*)')
-                ->setParameter('min_rate', $filter->minRate);
-        }
+            if (null !== $filter->minRate) {
+                $skipped->andHaving('COUNT(*) FILTER (WHERE p.skipped) * 100 >= :min_rate * COUNT(*)')
+                    ->setParameter('min_rate', $filter->minRate);
+            }
 
-        /** @var list<array{id: string, name: string, artist_name: string, image_url: ?string, skipped_at: string, skips: int, starts: int, playlists: string}> $rows */
-        $rows = $this->connection->fetchAllAssociative('
-            WITH skipped AS (' . $skipped->getSQL() . '),
-            copies AS (
-                SELECT ' . Songs::keyColumns('t') . ', pl.spotify_id AS id, pl.name AS playlist_name,
-                    json_agg(json_build_object(\'position\', pt.position, \'id\', t.id) ORDER BY pt.position) AS tracks
-                FROM playlist pl
-                INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
-                INNER JOIN track t ON t.id = pt.track_id
-                WHERE pl.user_id = :user AND pl.readable AND (' . Songs::key('t') . ') IN (SELECT name, artist FROM skipped)
-                GROUP BY 1, 2, pl.id
-            )
-            SELECT s.id, t.name, t.artist_name, s.image_url, s.skipped_at, s.skips, s.starts,
-                COALESCE((
-                    SELECT json_agg(json_build_object(\'id\', c.id, \'name\', c.playlist_name, \'tracks\', c.tracks) ORDER BY lower(c.playlist_name))
-                    FROM copies c
-                    WHERE (c.name, c.artist) = (s.name, s.artist)
-                ), \'[]\') AS playlists
-            FROM skipped s
-            INNER JOIN track t ON t.id = s.id
-            ORDER BY s.skipped_at DESC, s.name, s.artist
-            ', $skipped->getParameters());
+            /** @var list<array{id: string, name: string, artist_name: string, image_url: ?string, skipped_at: string, skips: int, starts: int, playlists: string}> $rows */
+            $rows = $this->connection->fetchAllAssociative('
+                WITH skipped AS (' . $skipped->getSQL() . '),
+                copies AS (
+                    SELECT ' . Songs::keyColumns('t') . ', pl.spotify_id AS id, pl.name AS playlist_name,
+                        json_agg(json_build_object(\'position\', pt.position, \'id\', t.id) ORDER BY pt.position) AS tracks
+                    FROM playlist pl
+                    INNER JOIN playlist_track pt ON pt.playlist_id = pl.id
+                    INNER JOIN track t ON t.id = pt.track_id
+                    WHERE pl.user_id = :user AND pl.readable AND (' . Songs::key('t') . ') IN (SELECT name, artist FROM skipped)
+                    GROUP BY 1, 2, pl.id
+                )
+                SELECT s.id, t.name, t.artist_name, s.image_url, s.skipped_at, s.skips, s.starts,
+                    COALESCE((
+                        SELECT json_agg(json_build_object(\'id\', c.id, \'name\', c.playlist_name, \'tracks\', c.tracks) ORDER BY lower(c.playlist_name))
+                        FROM copies c
+                        WHERE (c.name, c.artist) = (s.name, s.artist)
+                    ), \'[]\') AS playlists
+                FROM skipped s
+                INNER JOIN track t ON t.id = s.id
+                ORDER BY s.skipped_at DESC, s.name, s.artist
+                ', $skipped->getParameters());
 
-        return array_map(static fn (array $row): SkippedSong => new SkippedSong(
-            id: $row['id'],
-            name: $row['name'],
-            artistName: $row['artist_name'],
-            imageUrl: $row['image_url'],
-            skippedAt: new \DateTimeImmutable($row['skipped_at']),
-            skips: $row['skips'],
-            starts: $row['starts'],
-            playlists: json_decode($row['playlists'], true, flags: \JSON_THROW_ON_ERROR),
-        ), $rows);
+            return array_map(static fn (array $row): SkippedSong => new SkippedSong(
+                id: $row['id'],
+                name: $row['name'],
+                artistName: $row['artist_name'],
+                imageUrl: $row['image_url'],
+                skippedAt: new \DateTimeImmutable($row['skipped_at']),
+                skips: $row['skips'],
+                starts: $row['starts'],
+                playlists: json_decode($row['playlists'], true, flags: \JSON_THROW_ON_ERROR),
+            ), $rows);
+        });
     }
 
     /**

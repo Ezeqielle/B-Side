@@ -6,6 +6,7 @@ use App\Entity\Play;
 use App\Entity\User;
 use App\History\HistorySummary;
 use App\History\StreamedPlay;
+use App\Stats\StatsCache;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
 
@@ -17,6 +18,7 @@ class PlayRepository extends ServiceEntityRepository
     public function __construct(
         ManagerRegistry $registry,
         private readonly TrackRepository $trackRepository,
+        private readonly StatsCache $cache,
     ) {
         parent::__construct($registry, Play::class);
     }
@@ -49,26 +51,31 @@ class PlayRepository extends ServiceEntityRepository
         });
     }
 
+    /**
+     * Gardé dans le cache des stats, vidé à chaque import.
+     */
     public function summarize(User $user): HistorySummary
     {
-        /** @var array{plays: int, tracks: int, firstPlayedAt: ?string, lastPlayedAt: ?string} $row */
-        $row = $this->createQueryBuilder('p')
-            ->select(
-                'COUNT(p.id) AS plays',
-                'COUNT(DISTINCT IDENTITY(p.track)) AS tracks',
-                'MIN(p.playedAt) AS firstPlayedAt',
-                'MAX(p.playedAt) AS lastPlayedAt',
-            )
-            ->where('p.user = :user')
-            ->setParameter('user', $user)
-            ->getQuery()
-            ->getSingleResult();
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user): HistorySummary {
+            /** @var array{plays: int, tracks: int, firstPlayedAt: ?string, lastPlayedAt: ?string} $row */
+            $row = $this->createQueryBuilder('p')
+                ->select(
+                    'COUNT(p.id) AS plays',
+                    'COUNT(DISTINCT IDENTITY(p.track)) AS tracks',
+                    'MIN(p.playedAt) AS firstPlayedAt',
+                    'MAX(p.playedAt) AS lastPlayedAt',
+                )
+                ->where('p.user = :user')
+                ->setParameter('user', $user)
+                ->getQuery()
+                ->getSingleResult();
 
-        return new HistorySummary(
-            plays: $row['plays'],
-            tracks: $row['tracks'],
-            firstPlayedAt: null !== $row['firstPlayedAt'] ? new \DateTimeImmutable($row['firstPlayedAt']) : null,
-            lastPlayedAt: null !== $row['lastPlayedAt'] ? new \DateTimeImmutable($row['lastPlayedAt']) : null,
-        );
+            return new HistorySummary(
+                plays: $row['plays'],
+                tracks: $row['tracks'],
+                firstPlayedAt: null !== $row['firstPlayedAt'] ? new \DateTimeImmutable($row['firstPlayedAt']) : null,
+                lastPlayedAt: null !== $row['lastPlayedAt'] ? new \DateTimeImmutable($row['lastPlayedAt']) : null,
+            );
+        });
     }
 }

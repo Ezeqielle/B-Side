@@ -14,30 +14,34 @@ final readonly class PlayStats
     private const string SKIP_RATE = 'COALESCE(AVG(p.skipped::int), 0)';
     private const string LOCAL_TIME = 'p.played_at AT TIME ZONE :tz';
 
-    public function __construct(private Songs $songs)
-    {
+    public function __construct(
+        private Songs $songs,
+        private StatsCache $cache,
+    ) {
     }
 
     public function overview(User $user, PlayFilter $filter): Overview
     {
-        /** @var array{plays: int, ms_played: int, tracks: int, artists: int, skip_rate: string} $row */
-        $row = $this->songs->plays($user, $filter)
-            ->select(
-                Songs::PLAYS . ' AS plays',
-                self::MS_PLAYED . ' AS ms_played',
-                'COUNT(DISTINCT p.track_id) AS tracks',
-                'COUNT(DISTINCT lower(t.artist_name)) AS artists',
-                self::SKIP_RATE . ' AS skip_rate',
-            )
-            ->fetchAssociative();
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $filter): Overview {
+            /** @var array{plays: int, ms_played: int, tracks: int, artists: int, skip_rate: string} $row */
+            $row = $this->songs->plays($user, $filter)
+                ->select(
+                    Songs::PLAYS . ' AS plays',
+                    self::MS_PLAYED . ' AS ms_played',
+                    'COUNT(DISTINCT p.track_id) AS tracks',
+                    'COUNT(DISTINCT lower(t.artist_name)) AS artists',
+                    self::SKIP_RATE . ' AS skip_rate',
+                )
+                ->fetchAssociative();
 
-        return new Overview(
-            plays: $row['plays'],
-            msPlayed: (int) $row['ms_played'],
-            tracks: $row['tracks'],
-            artists: $row['artists'],
-            skipRate: (float) $row['skip_rate'],
-        );
+            return new Overview(
+                plays: $row['plays'],
+                msPlayed: (int) $row['ms_played'],
+                tracks: $row['tracks'],
+                artists: $row['artists'],
+                skipRate: (float) $row['skip_rate'],
+            );
+        });
     }
 
     /**
@@ -45,7 +49,7 @@ final readonly class PlayStats
      */
     public function topTracks(User $user, PlayFilter $filter, int $limit, int $offset = 0): array
     {
-        return $this->rankTracks($this->songs->plays($user, $filter), $limit, $offset);
+        return $this->cache->get($user, __METHOD__, \func_get_args(), fn (): array => $this->rankTracks($this->songs->plays($user, $filter), $limit, $offset));
     }
 
     /**
@@ -55,7 +59,7 @@ final readonly class PlayStats
      */
     public function topTracksOutsidePlaylists(User $user, PlayFilter $filter, int $limit): array
     {
-        return $this->rankTracks($this->songs->plays($user, $filter)->andWhere('NOT ' . Songs::inPlaylists('t')), $limit);
+        return $this->cache->get($user, __METHOD__, \func_get_args(), fn (): array => $this->rankTracks($this->songs->plays($user, $filter)->andWhere('NOT ' . Songs::inPlaylists('t')), $limit));
     }
 
     /**
@@ -63,27 +67,29 @@ final readonly class PlayStats
      */
     public function topArtists(User $user, PlayFilter $filter, int $limit): array
     {
-        /** @var list<array{artist_name: string, plays: int, ms_played: int, tracks: int}> $rows */
-        $rows = $this->songs->plays($user, $filter)
-            ->select(
-                'MIN(t.artist_name) AS artist_name',
-                Songs::PLAYS . ' AS plays',
-                self::MS_PLAYED . ' AS ms_played',
-                'COUNT(DISTINCT p.track_id) AS tracks',
-            )
-            ->groupBy('lower(t.artist_name)')
-            ->having(Songs::PLAYS . ' > 0')
-            ->orderBy('plays', 'DESC')
-            ->addOrderBy('ms_played', 'DESC')
-            ->setMaxResults($limit)
-            ->fetchAllAssociative();
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $filter, $limit): array {
+            /** @var list<array{artist_name: string, plays: int, ms_played: int, tracks: int}> $rows */
+            $rows = $this->songs->plays($user, $filter)
+                ->select(
+                    'MIN(t.artist_name) AS artist_name',
+                    Songs::PLAYS . ' AS plays',
+                    self::MS_PLAYED . ' AS ms_played',
+                    'COUNT(DISTINCT p.track_id) AS tracks',
+                )
+                ->groupBy('lower(t.artist_name)')
+                ->having(Songs::PLAYS . ' > 0')
+                ->orderBy('plays', 'DESC')
+                ->addOrderBy('ms_played', 'DESC')
+                ->setMaxResults($limit)
+                ->fetchAllAssociative();
 
-        return array_map(static fn (array $row): ArtistStat => new ArtistStat(
-            name: $row['artist_name'],
-            plays: $row['plays'],
-            msPlayed: (int) $row['ms_played'],
-            tracks: $row['tracks'],
-        ), $rows);
+            return array_map(static fn (array $row): ArtistStat => new ArtistStat(
+                name: $row['artist_name'],
+                plays: $row['plays'],
+                msPlayed: (int) $row['ms_played'],
+                tracks: $row['tracks'],
+            ), $rows);
+        });
     }
 
     /**
@@ -93,22 +99,24 @@ final readonly class PlayStats
      */
     public function timeline(User $user, PlayFilter $filter): array
     {
-        /** @var list<array{month: string, plays: int, ms_played: int}> $rows */
-        $rows = $this->songs->plays($user, $filter)
-            ->select(
-                'to_char(' . self::LOCAL_TIME . ", 'YYYY-MM') AS month",
-                Songs::PLAYS . ' AS plays',
-                self::MS_PLAYED . ' AS ms_played',
-            )
-            ->groupBy('month')
-            ->orderBy('month')
-            ->fetchAllAssociative();
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $filter): array {
+            /** @var list<array{month: string, plays: int, ms_played: int}> $rows */
+            $rows = $this->songs->plays($user, $filter)
+                ->select(
+                    'to_char(' . self::LOCAL_TIME . ", 'YYYY-MM') AS month",
+                    Songs::PLAYS . ' AS plays',
+                    self::MS_PLAYED . ' AS ms_played',
+                )
+                ->groupBy('month')
+                ->orderBy('month')
+                ->fetchAllAssociative();
 
-        return array_map(static fn (array $row): MonthStat => new MonthStat(
-            month: $row['month'],
-            plays: $row['plays'],
-            msPlayed: (int) $row['ms_played'],
-        ), $rows);
+            return array_map(static fn (array $row): MonthStat => new MonthStat(
+                month: $row['month'],
+                plays: $row['plays'],
+                msPlayed: (int) $row['ms_played'],
+            ), $rows);
+        });
     }
 
     /**
@@ -118,21 +126,23 @@ final readonly class PlayStats
      */
     public function clock(User $user, PlayFilter $filter): array
     {
-        /** @var list<array{weekday: string, hour: string, plays: int}> $rows */
-        $rows = $this->songs->plays($user, $filter)
-            ->select(
-                'EXTRACT(ISODOW FROM ' . self::LOCAL_TIME . ') AS weekday',
-                'EXTRACT(HOUR FROM ' . self::LOCAL_TIME . ') AS hour',
-                Songs::PLAYS . ' AS plays',
-            )
-            ->groupBy('weekday', 'hour')
-            ->fetchAllAssociative();
+        return $this->cache->get($user, __METHOD__, \func_get_args(), function () use ($user, $filter): array {
+            /** @var list<array{weekday: string, hour: string, plays: int}> $rows */
+            $rows = $this->songs->plays($user, $filter)
+                ->select(
+                    'EXTRACT(ISODOW FROM ' . self::LOCAL_TIME . ') AS weekday',
+                    'EXTRACT(HOUR FROM ' . self::LOCAL_TIME . ') AS hour',
+                    Songs::PLAYS . ' AS plays',
+                )
+                ->groupBy('weekday', 'hour')
+                ->fetchAllAssociative();
 
-        return array_map(static fn (array $row): HourStat => new HourStat(
-            weekday: (int) $row['weekday'],
-            hour: (int) $row['hour'],
-            plays: $row['plays'],
-        ), $rows);
+            return array_map(static fn (array $row): HourStat => new HourStat(
+                weekday: (int) $row['weekday'],
+                hour: (int) $row['hour'],
+                plays: $row['plays'],
+            ), $rows);
+        });
     }
 
     /**

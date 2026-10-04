@@ -6,7 +6,6 @@ use App\Entity\User;
 use App\Stats\PlayFilter;
 use App\Stats\PlayStats;
 use App\Stats\SongStats;
-use App\Stats\StatsCache;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Attribute\MapQueryParameter;
@@ -25,7 +24,6 @@ class StatsController extends AbstractController
 
     public function __construct(
         private readonly PlayStats $stats,
-        private readonly StatsCache $cache,
         private readonly SongStats $songs,
     ) {
     }
@@ -33,7 +31,7 @@ class StatsController extends AbstractController
     #[Route('/overview', name: 'overview')]
     public function overview(#[CurrentUser] User $user, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter], fn () => $this->stats->overview($user, $filter)));
+        return $this->json($this->stats->overview($user, $filter));
     }
 
     #[Route('/tracks', name: 'tracks')]
@@ -43,7 +41,7 @@ class StatsController extends AbstractController
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
         #[MapQueryParameter(options: self::OFFSET)] int $offset = 0,
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit, $offset], fn () => $this->stats->topTracks($user, $filter, $limit, $offset)));
+        return $this->json($this->stats->topTracks($user, $filter, $limit, $offset));
     }
 
     /**
@@ -55,7 +53,7 @@ class StatsController extends AbstractController
         string $id,
         #[MapQueryString] PlayFilter $filter = new PlayFilter(),
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$id, $filter->tz], fn () => $this->songs->forTrack($user, $id, $filter->tz)));
+        return $this->json($this->songs->forTrack($user, $id, $filter->tz));
     }
 
     #[Route('/artists', name: 'artists')]
@@ -64,18 +62,18 @@ class StatsController extends AbstractController
         #[MapQueryString] PlayFilter $filter = new PlayFilter(),
         #[MapQueryParameter(options: self::LIMIT)] int $limit = 50,
     ): JsonResponse {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter, $limit], fn () => $this->stats->topArtists($user, $filter, $limit)));
+        return $this->json($this->stats->topArtists($user, $filter, $limit));
     }
 
     #[Route('/timeline', name: 'timeline')]
     public function timeline(#[CurrentUser] User $user, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter], fn () => $this->stats->timeline($user, $filter)));
+        return $this->json($this->stats->timeline($user, $filter));
     }
 
     #[Route('/clock', name: 'clock')]
     public function clock(#[CurrentUser] User $user, #[MapQueryString] PlayFilter $filter = new PlayFilter()): JsonResponse
     {
-        return $this->json($this->cache->get($user, __METHOD__, [$filter], fn () => $this->stats->clock($user, $filter)));
+        return $this->json($this->stats->clock($user, $filter));
     }
 }

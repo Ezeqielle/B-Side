@@ -1445,7 +1445,6 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *     doctrine?: DoctrineConfig,
  *     doctrine_migrations?: DoctrineMigrationsConfig,
  *     security?: SecurityConfig,
- *     twig?: TwigConfig,
  *     knpu_oauth2_client?: KnpuOauth2ClientConfig,
  *     "when@dev"?: array{
  *         imports?: ImportsConfig,
@@ -1471,7 +1470,6 @@ use Symfony\Component\Config\Loader\ParamConfigurator as Param;
  *         doctrine?: DoctrineConfig,
  *         doctrine_migrations?: DoctrineMigrationsConfig,
  *         security?: SecurityConfig,
- *         twig?: TwigConfig,
  *         knpu_oauth2_client?: KnpuOauth2ClientConfig,
  *     },
  *     "when@test"?: array{

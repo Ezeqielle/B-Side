@@ -13,6 +13,7 @@ use App\MessageHandler\SyncPlaylistsHandler;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
+use Symfony\Component\Clock\Test\ClockSensitiveTrait;
 use Symfony\Component\HttpClient\MockHttpClient;
 use Symfony\Component\HttpClient\Response\JsonMockResponse;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
@@ -31,6 +32,8 @@ use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
  */
 class PlaylistControllerTest extends WebTestCase
 {
+    use ClockSensitiveTrait;
+
     private const string SONG_A = '4uLU6hMCjMI75M1A2tKUQC';
     private const string SONG_A_OTHER_ALBUM = '0000000000000000000001';
     private const string SONG_B = '7ouMYWpwJ422jRcDASZB7P';
@@ -60,6 +63,8 @@ class PlaylistControllerTest extends WebTestCase
 
     protected function setUp(): void
     {
+        // Heure figée : deux retraits d'un même test ont la même date, et le journal garde un ordre stable
+        static::mockTime();
         $this->client = static::createClient();
         // Le même conteneur pour les requêtes et les synchros, et donc le même faux Spotify
         $this->client->disableReboot();

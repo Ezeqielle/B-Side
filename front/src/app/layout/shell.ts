@@ -1,15 +1,15 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
-import { HlmAvatarImports } from '@spartan-ng/helm/avatar';
 import { NgIcon, provideIcons } from '@ng-icons/core';
 import { lucideVolume2, lucideVolumeX } from '@ng-icons/lucide';
 import { HlmButtonImports } from '@spartan-ng/helm/button';
+import { AccountAvatar, accountName } from '../core/account-avatar';
 import { AuthService } from '../core/auth.service';
 import { PreviewPlayer } from '../core/preview-player';
 
 @Component({
   selector: 'app-shell',
-  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgIcon, HlmAvatarImports, HlmButtonImports],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgIcon, AccountAvatar, HlmButtonImports],
   viewProviders: [provideIcons({ lucideVolume2, lucideVolumeX })],
   template: `
     <header class="bg-background/80 sticky top-0 z-10 border-b backdrop-blur">
@@ -35,13 +35,15 @@ import { PreviewPlayer } from '../core/preview-player';
             <ng-icon [name]="previews.enabled() ? 'lucideVolume2' : 'lucideVolumeX'" size="1.1em" />
           </button>
           @if (auth.user(); as user) {
-            <span class="hidden text-sm sm:inline">{{ user.displayName }}</span>
-            <hlm-avatar>
-              @if (user.avatarUrl) {
-                <img hlmAvatarImage [src]="user.avatarUrl" [alt]="user.displayName ?? ''" />
-              }
-              <span hlmAvatarFallback>{{ initials() }}</span>
-            </hlm-avatar>
+            <a
+              routerLink="/comptes"
+              class="flex items-center gap-3"
+              title="Comptes liés"
+              [attr.aria-label]="accountName(user) + ', comptes liés'"
+            >
+              <span class="hidden text-sm sm:inline">{{ accountName(user) }}</span>
+              <app-account-avatar [account]="user" />
+            </a>
           }
           <button hlmBtn variant="ghost" size="sm" (click)="auth.logout()">Déconnexion</button>
         </div>
@@ -55,8 +57,5 @@ import { PreviewPlayer } from '../core/preview-player';
 export class Shell {
   protected readonly auth = inject(AuthService);
   protected readonly previews = inject(PreviewPlayer);
-
-  protected readonly initials = computed(() =>
-    (this.auth.user()?.displayName ?? '?').slice(0, 2).toUpperCase(),
-  );
+  protected readonly accountName = accountName;
 }

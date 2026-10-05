@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Dto\CopyPlaylist;
 use App\Dto\CreatePlaylist;
 use App\Dto\KeepTracks;
 use App\Dto\RemoveFromPlaylists;
@@ -135,6 +136,23 @@ class PlaylistController extends AbstractController
         $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
 
         return $this->json($this->stats->versions($playlist));
+    }
+
+    /**
+     * Copie la playlist sur un autre compte de l'utilisateur, lié au préalable.
+     */
+    #[Route('/{id}/copy', name: '_copy', methods: ['POST'])]
+    public function copy(
+        #[CurrentUser] User $user,
+        string $id,
+        #[MapRequestPayload] CopyPlaylist $payload,
+        PlaylistRepository $playlistRepository,
+        PlaylistCreation $creation,
+    ): JsonResponse {
+        $playlist = $playlistRepository->findOneReadable($user, $id) ?? throw $this->createNotFoundException();
+        $account = $user->findLinkedAccount($payload->accountId) ?? throw $this->createNotFoundException();
+
+        return $this->json(['id' => $creation->copy($playlist, $account, $payload->name)], Response::HTTP_CREATED);
     }
 
     /**

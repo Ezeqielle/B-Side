@@ -2,10 +2,15 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\User;
+use App\Repository\UserRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\WebTestCase;
 
 class AuthControllerTest extends WebTestCase
 {
+    use SpotifyOAuthMock;
+
     public function testLoginRedirectsToSpotifyWithScopes(): void
     {
         $client = static::createClient();
@@ -17,6 +22,23 @@ class AuthControllerTest extends WebTestCase
         self::assertStringContainsString('client_id=test-client-id', $location);
         self::assertStringContainsString('scope=user-top-read%20user-read-recently-played', $location);
         self::assertStringContainsString(urlencode('/api/auth/callback'), $location);
+    }
+
+    public function testCallbackSavesTheAccountAndOpensTheSession(): void
+    {
+        $client = static::createClient();
+        $client->disableReboot();
+        static::getContainer()->get(EntityManagerInterface::class)->createQuery('DELETE FROM ' . User::class)->execute();
+
+        $client->request('GET', '/api/auth/login');
+        parse_str((string) parse_url((string) $client->getResponse()->headers->get('Location'), \PHP_URL_QUERY), $query);
+        $this->mockSpotifyOAuth('spotify', 'me', 'Jane Doe');
+        $client->request('GET', '/api/auth/callback', ['code' => 'code', 'state' => $query['state']]);
+
+        self::assertResponseRedirects('/');
+        self::assertSame('me-access-token', static::getContainer()->get(UserRepository::class)->findOneBySpotifyId('me')?->getAccessToken());
+        $client->request('GET', '/api/me');
+        self::assertJsonStringEqualsJsonString('{"id":"me","displayName":"Jane Doe","avatarUrl":null}', (string) $client->getResponse()->getContent());
     }
 
     public function testApiRequiresAuthentication(): void

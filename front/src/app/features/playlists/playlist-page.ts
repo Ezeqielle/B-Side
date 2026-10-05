@@ -11,6 +11,7 @@ import { PlaylistsApi } from '../../core/playlists-api';
 import { TrackPreview } from '../../core/track-preview';
 import { urlState } from '../../core/url-state';
 import { CleanupPanel } from './cleanup-panel';
+import { CopyPlaylist } from './copy-playlist';
 import { CLEANUP_PARAMS, PRESETS, matchesRules } from './cleanup-rules';
 import { PlaylistCover } from './playlist-cover';
 import { removal } from './removal';
@@ -47,6 +48,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
     HlmCheckboxImports,
     HlmSkeletonImports,
     CleanupPanel,
+    CopyPlaylist,
     PlaylistCover,
     RemovalOutcome,
     RemoveTracks,
@@ -60,9 +62,9 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
     </a>
 
     @if (playlist.value(); as p) {
-      <div class="mb-6 flex items-center gap-4">
+      <div class="mb-6 flex flex-wrap items-center gap-4">
         <app-playlist-cover class="size-20 sm:size-24" [playlist]="p" />
-        <div class="min-w-0">
+        <div class="min-w-0 flex-1">
           <h1 class="truncate text-2xl font-bold tracking-tight">{{ p.name }}</h1>
           <p class="text-muted-foreground text-sm">
             {{ p.tracks | number }} titres · {{ p.artists | number }} artistes · {{ duration() }}
@@ -71,6 +73,7 @@ const COLUMNS: Record<string, (track: PlaylistTrackStat) => string | number | nu
             Dernière écoute {{ p.lastPlayedAt | since: 'jamais' }} · dernier ajout {{ p.lastAddedAt | since }}
           </p>
         </div>
+        <app-copy-playlist [playlistId]="id()" [name]="p.name" />
       </div>
     }
 

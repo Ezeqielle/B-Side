@@ -7,3 +7,10 @@ knpu_oauth2_client:
             client_secret: '%env(SPOTIFY_CLIENT_SECRET)%'
             redirect_route: api_auth_callback
             redirect_params: {}
+        # Même app, retour à part : lie un autre compte à celui de la session, sans la changer
+        spotify_link:
+            type: spotify
+            client_id: '%env(SPOTIFY_CLIENT_ID)%'
+            client_secret: '%env(SPOTIFY_CLIENT_SECRET)%'
+            redirect_route: api_accounts_link_callback
+            redirect_params: {}

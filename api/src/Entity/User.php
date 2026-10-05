@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\UserRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Security\Core\User\UserInterface;
@@ -41,12 +43,25 @@ class User implements UserInterface
     #[ORM\Column(length: 64, nullable: true)]
     private ?string $trashPlaylistId = null;
 
+    /**
+     * Autres comptes Spotify de la même personne, liés en s'y connectant : on peut y copier ses playlists.
+     * Le lien est enregistré dans les deux sens.
+     *
+     * @var Collection<int, self>
+     */
+    #[ORM\ManyToMany(targetEntity: self::class)]
+    #[ORM\JoinTable(name: 'linked_account')]
+    #[ORM\JoinColumn(name: 'user_id', onDelete: 'CASCADE')]
+    #[ORM\InverseJoinColumn(name: 'linked_user_id', onDelete: 'CASCADE')]
+    private Collection $linkedAccounts;
+
     public function __construct(
         #[ORM\Column(length: 255, unique: true)]
         private readonly string $spotifyId,
     ) {
         $this->tokenExpiresAt = new \DateTimeImmutable();
         $this->createdAt = new \DateTimeImmutable();
+        $this->linkedAccounts = new ArrayCollection();
     }
 
     public function getId(): ?int
@@ -138,6 +153,40 @@ class User implements UserInterface
     public function setTrashPlaylistId(?string $trashPlaylistId): static
     {
         $this->trashPlaylistId = $trashPlaylistId;
+
+        return $this;
+    }
+
+    /**
+     * @return list<self>
+     */
+    public function getLinkedAccounts(): array
+    {
+        return array_values($this->linkedAccounts->toArray());
+    }
+
+    public function findLinkedAccount(string $spotifyId): ?self
+    {
+        return $this->linkedAccounts->findFirst(static fn (int $key, self $account): bool => $account->spotifyId === $spotifyId);
+    }
+
+    public function link(self $account): static
+    {
+        if ($account === $this) {
+            throw new \LogicException('An account cannot be linked to itself.');
+        }
+        if (!$this->linkedAccounts->contains($account)) {
+            $this->linkedAccounts->add($account);
+            $account->linkedAccounts->add($this);
+        }
+
+        return $this;
+    }
+
+    public function unlink(self $account): static
+    {
+        $this->linkedAccounts->removeElement($account);
+        $account->linkedAccounts->removeElement($this);
 
         return $this;
     }

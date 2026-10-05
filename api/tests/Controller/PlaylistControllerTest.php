@@ -52,6 +52,9 @@ class PlaylistControllerTest extends WebTestCase
     /** @var list<array{0: string, 1: mixed}> écritures sur Spotify : « méthode chemin?query » et corps JSON */
     private array $writes = [];
 
+    /** @var list<string> token de chaque écriture, pour savoir sur quel compte elle a lieu */
+    private array $writeTokens = [];
+
     /** @var (\Closure(string): bool)|null écritures que Spotify refuse, d'après « méthode chemin?query » */
     private ?\Closure $refuse = null;
 
@@ -508,6 +511,40 @@ class PlaylistControllerTest extends WebTestCase
         self::assertEquals([new SyncPlaylists($this->userId())], $this->queued(), 'Synchro pour l\'afficher');
     }
 
+    public function testPlaylistIsCopiedToALinkedAccount(): void
+    {
+        $this->sync();
+        $other = $this->linkAccount();
+
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/copy', ['accountId' => 'other', 'name' => 'Road trip']);
+
+        self::assertResponseStatusCodeSame(201);
+        self::assertSame(['id' => 'new'], json_decode((string) $this->client->getResponse()->getContent(), true));
+        self::assertSame([
+            ['POST me/playlists', ['name' => 'Road trip', 'description' => 'Créée par B-Side.', 'public' => false]],
+            ['POST playlists/new/items', ['uris' => ['spotify:track:' . self::SONG_B, 'spotify:track:' . self::SONG_C]]],
+        ], $this->writes, 'Titres synchronisés, sans le fichier local');
+        self::assertSame(['other-token', 'other-token'], $this->writeTokens, 'Sur l\'autre compte');
+        self::assertEquals([new SyncPlaylists((int) $other->getId())], $this->queued(), 'Synchro de l\'autre compte');
+    }
+
+    public function testCopyOnlyGoesToALinkedAccountFromAReadablePlaylist(): void
+    {
+        $this->sync();
+        $this->linkAccount();
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->persist(new User('stranger')->setDisplayName('Stranger')->updateTokens('stranger-token', 'refresh-token', new \DateTimeImmutable('+1 hour')));
+        $em->flush();
+
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/copy', ['accountId' => 'stranger', 'name' => 'Road trip']);
+        self::assertResponseStatusCodeSame(404, 'Compte non lié');
+        $this->client->jsonRequest('POST', '/api/playlists/discover/copy', ['accountId' => 'other', 'name' => 'Découvertes']);
+        self::assertResponseStatusCodeSame(404, 'Contenu inconnu');
+        $this->client->jsonRequest('POST', '/api/playlists/road-trip/copy', ['accountId' => 'other', 'name' => ' ']);
+        self::assertResponseStatusCodeSame(422);
+        self::assertSame([], $this->writes);
+    }
+
     public function testCreateValidation(): void
     {
         $this->client->jsonRequest('POST', '/api/playlists', ['name' => ' ', 'trackIds' => [self::SONG_A]]);
@@ -598,6 +635,7 @@ class PlaylistControllerTest extends WebTestCase
     {
         $request = $method . ' ' . substr($url, \strlen('https://api.spotify.com/v1/'));
         $this->writes[] = [$request, isset($options['body']) && '' !== $options['body'] ? json_decode($options['body'], true) : null];
+        $this->writeTokens[] = substr($options['normalized_headers']['authorization'][0], \strlen('Authorization: Bearer '));
 
         if (null !== $this->refuse && ($this->refuse)($request)) {
             return $this->forbidden();
@@ -666,6 +704,20 @@ class PlaylistControllerTest extends WebTestCase
     private function like(int $i): array
     {
         return $this->item(\sprintf('L%021d', $i), 'Like ' . $i, 'Artist', '2026-01-01T10:00:00Z', 'track');
+    }
+
+    /**
+     * Lie à Jane Doe son autre compte, `other`.
+     */
+    private function linkAccount(): User
+    {
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $other = new User('other')->setDisplayName('Jane Pro')->updateTokens('other-token', 'refresh-token', new \DateTimeImmutable('+1 hour'));
+        $em->persist($other);
+        $em->getRepository(User::class)->findOneBy(['spotifyId' => 'me'])?->link($other);
+        $em->flush();
+
+        return $other;
     }
 
     private function userId(): int

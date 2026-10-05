@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Dto\Profile;
 use App\Dto\TopTracksQuery;
 use App\Entity\User;
 use App\Spotify\SpotifyApi;
@@ -17,11 +18,7 @@ class MeController extends AbstractController
     #[Route('', name: '', methods: ['GET'])]
     public function me(#[CurrentUser] User $user): JsonResponse
     {
-        return $this->json([
-            'id' => $user->getSpotifyId(),
-            'displayName' => $user->getDisplayName(),
-            'avatarUrl' => $user->getAvatarUrl(),
-        ]);
+        return $this->json(Profile::of($user));
     }
 
     #[Route('/top/tracks', name: '_top_tracks', methods: ['GET'])]

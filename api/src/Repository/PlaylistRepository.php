@@ -57,6 +57,26 @@ class PlaylistRepository extends ServiceEntityRepository
     }
 
     /**
+     * Ids Spotify des titres de la playlist, dans l'ordre.
+     *
+     * @return list<string>
+     */
+    public function findTrackIds(Playlist $playlist): array
+    {
+        /** @var list<string> $ids */
+        $ids = $this->getEntityManager()->createQueryBuilder()
+            ->select('IDENTITY(pt.track)')
+            ->from(PlaylistTrack::class, 'pt')
+            ->where('pt.playlist = :playlist')
+            ->setParameter('playlist', $playlist)
+            ->orderBy('pt.position')
+            ->getQuery()
+            ->getSingleColumnResult();
+
+        return $ids;
+    }
+
+    /**
      * Remplace le contenu de la playlist, en enregistrant ses titres.
      *
      * @param list<PlaylistItem> $items

@@ -103,6 +103,14 @@ export class PlaylistsApi {
       .pipe(finalize(() => this.cache.clear()));
   }
 
+  /** Copie la playlist sur un compte lié. Les stats de ce compte-ci ne changent pas. */
+  copy(id: string, accountId: string, name: string): Observable<{ id: string }> {
+    return this.http.post<{ id: string }>(`/api/playlists/${encodeURIComponent(id)}/copy`, {
+      accountId,
+      name,
+    });
+  }
+
   /**
    * Lance la synchro, puis vérifie toutes les 2 s, pendant 3 min au plus, si `syncedAt` a changé.
    * Se termine dans tous les cas : il suffit alors de tout recharger. Se désabonner arrête l'attente.

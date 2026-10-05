@@ -2,13 +2,15 @@
 
 namespace App\Playlist;
 
+use App\Entity\Playlist;
 use App\Entity\User;
 use App\Message\SyncPlaylists;
+use App\Repository\PlaylistRepository;
 use App\Spotify\SpotifyApi;
 use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
- * Crée une playlist privée sur Spotify avec des titres, puis lance une synchro pour qu'elle apparaisse dans l'app.
+ * Crée une playlist privée sur Spotify avec des titres, ou en copie une, puis lance une synchro pour qu'elle apparaisse dans l'app.
  */
 class PlaylistCreation
 {
@@ -16,6 +18,7 @@ class PlaylistCreation
 
     public function __construct(
         private readonly SpotifyApi $spotify,
+        private readonly PlaylistRepository $playlistRepository,
         private readonly MessageBusInterface $bus,
     ) {
     }
@@ -34,5 +37,15 @@ class PlaylistCreation
         $this->bus->dispatch(new SyncPlaylists($user->getId() ?? throw new \LogicException('User not persisted.')));
 
         return $id;
+    }
+
+    /**
+     * Copie une playlist sur le compte `$to`, telle qu'elle a été synchronisée : celle que l'utilisateur voit.
+     *
+     * @return string id Spotify de la copie
+     */
+    public function copy(Playlist $playlist, User $to, string $name): string
+    {
+        return $this->create($to, $name, $this->playlistRepository->findTrackIds($playlist));
     }
 }

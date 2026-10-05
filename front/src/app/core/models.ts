@@ -4,6 +4,9 @@ export interface Me {
   avatarUrl: string | null;
 }
 
+/** Autre compte Spotify de l'utilisateur, où il peut copier ses playlists. */
+export type LinkedAccount = Me;
+
 export interface Track {
   id: string;
   uri: string;

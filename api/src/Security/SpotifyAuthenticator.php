@@ -2,10 +2,6 @@
 
 namespace App\Security;
 
-use App\Entity\User;
-use App\Repository\UserRepository;
-use Doctrine\ORM\EntityManagerInterface;
-use Kerox\OAuth2\Client\Provider\SpotifyResourceOwner;
 use KnpU\OAuth2ClientBundle\Client\ClientRegistry;
 use KnpU\OAuth2ClientBundle\Security\Authenticator\OAuth2Authenticator;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -20,15 +16,14 @@ use Symfony\Component\Security\Http\Authenticator\Passport\SelfValidatingPasspor
 use Symfony\Component\Security\Http\EntryPoint\AuthenticationEntryPointInterface;
 
 /**
- * Traite le retour de Spotify sur /api/auth/callback : crée ou met à jour l'utilisateur
- * avec ses tokens, puis renvoie vers le front.
+ * Traite le retour de Spotify sur /api/auth/callback : enregistre le compte, l'ouvre en session,
+ * puis renvoie vers le front.
  */
 class SpotifyAuthenticator extends OAuth2Authenticator implements AuthenticationEntryPointInterface
 {
     public function __construct(
         private readonly ClientRegistry $clientRegistry,
-        private readonly UserRepository $userRepository,
-        private readonly EntityManagerInterface $entityManager,
+        private readonly SpotifyAccounts $accounts,
     ) {
     }
 
@@ -43,25 +38,7 @@ class SpotifyAuthenticator extends OAuth2Authenticator implements Authentication
         $accessToken = $this->fetchAccessToken($client);
 
         return new SelfValidatingPassport(
-            new UserBadge($accessToken->getToken(), function () use ($client, $accessToken): User {
-                /** @var SpotifyResourceOwner $owner */
-                $owner = $client->fetchUserFromToken($accessToken);
-
-                $user = $this->userRepository->findOneBySpotifyId($owner->getId()) ?? new User($owner->getId());
-                $user
-                    ->setDisplayName($owner->getDisplayName())
-                    ->setAvatarUrl($owner->getImages()[0]['url'] ?? null)
-                    ->updateTokens(
-                        $accessToken->getToken(),
-                        $accessToken->getRefreshToken(),
-                        new \DateTimeImmutable()->setTimestamp($accessToken->getExpires() ?? time() + 3600),
-                    );
-
-                $this->entityManager->persist($user);
-                $this->entityManager->flush();
-
-                return $user;
-            }),
+            new UserBadge($accessToken->getToken(), fn () => $this->accounts->save($client, $accessToken)),
         );
     }
 

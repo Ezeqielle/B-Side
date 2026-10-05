@@ -22,7 +22,7 @@ Single URL: Caddy routes `/api` to Symfony and everything else to the front.
 ## Installation
 
 1. Create an app on the [Spotify dashboard](https://developer.spotify.com/dashboard):
-   - Redirect URI: `https://127.0.0.1/api/auth/callback`
+   - Redirect URIs: `https://127.0.0.1/api/auth/callback` and `https://127.0.0.1/api/accounts/link/callback` (linked accounts)
    - API: Web API
 2. Create `api/.env.local`:
 

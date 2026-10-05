@@ -23,6 +23,18 @@ Avantages : pas de configuration CORS, session en cookie HttpOnly, le callback O
 
 Les tokens Spotify sont stockés en base (`user`) et ne sont jamais envoyés au front.
 
+## Comptes liés
+
+Pour copier une playlist d'un compte Spotify à un autre, l'utilisateur lie son second compte depuis sa session (page « Comptes liés ») :
+
+1. `/api/accounts/link` renvoie vers Spotify avec `show_dialog=true`, qui demande quel compte autoriser.
+2. Spotify revient sur `/api/accounts/link/callback` (client knpu `spotify_link`). Le `state` OAuth prouve que la liaison vient de cette session. Le compte est enregistré comme un `User` avec ses tokens, et lié dans les deux sens (`linked_account`). La session ne change pas.
+   - Échec (refus, `state` invalide, compte absent des utilisateurs de l'app) : retour sur `/comptes?error=failed`. Même compte que la session : `?error=same`. Plus de session : `/login`.
+3. `GET /api/accounts` liste les comptes liés, `DELETE /api/accounts/{id}` en délie un. Le compte délié reste un `User`, comme après une connexion.
+4. `POST /api/playlists/{id}/copy` crée une playlist privée sur un compte lié, avec les titres synchronisés (titres likés compris), puis lance la synchro de ce compte. Un compte non lié répond 404.
+
+Le second compte doit faire partie des 5 utilisateurs de l'app dans le dashboard Spotify, sinon Spotify refuse son profil.
+
 ## Import de l'historique étendu
 
 1. Le front envoie chaque `Streaming_History_*.json` sur `POST /api/history`, un fichier par requête (32 Mo max, voir `10-app.ini`).

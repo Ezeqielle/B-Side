@@ -24,4 +24,6 @@ security:
     # Note: Only the *first* matching rule is applied
     access_control:
         - { path: ^/api/auth, roles: PUBLIC_ACCESS }
+        # Retour de Spotify : sans session, le contrôleur renvoie vers la connexion
+        - { path: ^/api/accounts/link/callback$, roles: PUBLIC_ACCESS }
         - { path: ^/api, roles: ROLE_USER }

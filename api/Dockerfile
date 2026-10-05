@@ -2,7 +2,8 @@
 
 # Versions
 FROM dunglas/frankenphp:1-php8.5 AS frankenphp_upstream
-FROM node:24-alpine AS node_upstream
+# The front build gives the same files on every platform: build it once, natively
+FROM --platform=$BUILDPLATFORM node:24-alpine AS node_upstream
 
 # The different stages of this Dockerfile are meant to be built into separate images
 # https://docs.docker.com/build/building/multi-stage/#stop-at-a-specific-build-stage
@@ -71,7 +72,7 @@ COPY --link frankenphp/conf.d/20-app.dev.ini $PHP_INI_DIR/app.conf.d/
 
 CMD [ "frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile", "--watch" ]
 
-# Build of the Angular front (context "front" provided by compose.prod.yaml)
+# Build of the Angular front (context "front" provided by compose.prod.yaml and .github/workflows/docker.yml)
 FROM node_upstream AS front_builder
 
 WORKDIR /front

@@ -1,0 +1,65 @@
+name: Docker
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Mêmes vérifications que `make ci` en local, dans les conteneurs de dev
+  tests:
+    runs-on: ubuntu-latest
+    env:
+      # Pas de terminal en CI : `exec -T`
+      EXEC_PHP: docker compose exec -T php
+      EXEC_FRONT: docker compose exec -T front
+    steps:
+      - uses: actions/checkout@v4
+
+      - run: make build
+      - run: make up
+      - run: make db-test
+      - run: make ci
+      - run: make front-test
+
+      - if: failure()
+        run: docker compose logs
+
+  image:
+    needs: tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # `latest` n'est ajouté que sur une version finale (v1.2.3, pas v1.2.3-rc.1).
+      # Lancé à la main, l'image porte le nom de la branche.
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ vars.DOCKERHUB_USERNAME }}/b-side-php-prod
+          tags: |
+            type=semver,pattern={{version}}
+            type=ref,event=branch
+
+      # Même image que compose.prod.yaml : l'API et le front Angular compilé
+      - uses: docker/build-push-action@v6
+        with:
+          context: ./api
+          target: frankenphp_prod
+          build-contexts: front=./front
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

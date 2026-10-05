@@ -117,6 +117,12 @@ APP_SECRET=… SPOTIFY_CLIENT_ID=… SPOTIFY_CLIENT_SECRET=… \
 
 L'étape `front_builder` du `api/Dockerfile` compile Angular à partir du contexte de build nommé `front` (`additional_contexts` dans `compose.prod.yaml`), puis le résultat est copié dans l'image FrankenPHP finale.
 
+### Publication sur Docker Hub
+
+Un tag `v*` lance `.github/workflows/docker.yml` : `make ci` et `make front-test`, puis l'image `b-side-php-prod` (amd64 et arm64) est publiée sur Docker Hub. `latest` ne suit que les versions finales (`v1.2.3`, pas `v1.2.3-rc.1`).
+
+À configurer dans le dépôt GitHub : la variable `DOCKERHUB_USERNAME` et le secret `DOCKERHUB_TOKEN`.
+
 ## Choix
 
 - **Angular + spartan/ui** plutôt que React + shadcn : même principe (composants copiés dans le projet et modifiables, Tailwind), spartan est stable depuis la 1.0 de juin 2026.

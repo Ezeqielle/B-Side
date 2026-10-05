@@ -10,7 +10,7 @@ import { AuthService } from '../../core/auth.service';
     <main class="grid min-h-dvh place-items-center bg-[radial-gradient(ellipse_at_top,var(--color-emerald-950),transparent_60%)] p-4">
       <section hlmCard class="w-full max-w-sm text-center">
         <div hlmCardHeader>
-          <h1 hlmCardTitle class="text-3xl font-bold tracking-tight">Spotylist</h1>
+          <h1 hlmCardTitle class="text-3xl font-bold tracking-tight">B-Side</h1>
           <p hlmCardDescription>Tes stats Spotify, des playlists générées et un peu de ménage dans tes titres likés.</p>
         </div>
         <div hlmCardContent class="flex flex-col gap-3">

@@ -1,4 +1,4 @@
-# Spotylist
+# B-Side
 
 Application web perso branchée sur un compte Spotify : stats d'écoute, playlists générées à partir de ces stats, nettoyage des titres likés, exploration de titres proches, extrait audio au survol des pochettes.
 

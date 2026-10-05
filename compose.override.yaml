@@ -2,7 +2,7 @@
 # Development environment override
 services:
   php:
-    image: ${IMAGES_PREFIX:-}spotylist-php-dev
+    image: ${IMAGES_PREFIX:-}b-side-php-dev
     build:
       context: ./api
       target: frankenphp_dev
@@ -26,7 +26,7 @@ services:
 
   # Le worker garde le code en mémoire : `make worker-restart` après une modification d'un handler.
   worker:
-    image: ${IMAGES_PREFIX:-}spotylist-php-dev
+    image: ${IMAGES_PREFIX:-}b-side-php-dev
     build:
       context: ./api
       target: frankenphp_dev

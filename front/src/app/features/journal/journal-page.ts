@@ -18,7 +18,7 @@ import { groupRemovals } from './removal-groups';
     <div class="mb-6">
       <h1 class="text-2xl font-bold tracking-tight">Journal</h1>
       <p class="text-muted-foreground text-sm">
-        Les titres retirés de tes playlists et de tes likes. Ils restent dans ta playlist « Spotylist · Corbeille »
+        Les titres retirés de tes playlists et de tes likes. Ils restent dans ta playlist « B-Side · Corbeille »
         tant qu'ils ne sont pas remis en place.
       </p>
     </div>

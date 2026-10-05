@@ -14,7 +14,7 @@ import { PreviewPlayer } from '../core/preview-player';
   template: `
     <header class="bg-background/80 sticky top-0 z-10 border-b backdrop-blur">
       <div class="mx-auto flex h-14 max-w-6xl items-center gap-6 px-4">
-        <a routerLink="/" class="text-lg font-bold tracking-tight">Spotylist</a>
+        <a routerLink="/" class="text-lg font-bold tracking-tight">B-Side</a>
         <nav class="text-muted-foreground flex gap-4 text-sm">
           <a routerLink="/top" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Tops</a>
           <a routerLink="/stats" routerLinkActive="text-foreground" class="hover:text-foreground transition-colors">Stats</a>

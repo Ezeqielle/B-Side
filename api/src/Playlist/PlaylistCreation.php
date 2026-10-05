@@ -12,7 +12,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
  */
 class PlaylistCreation
 {
-    public const string DESCRIPTION = 'Créée par Spotylist.';
+    public const string DESCRIPTION = 'Créée par B-Side.';
 
     public function __construct(
         private readonly SpotifyApi $spotify,

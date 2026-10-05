@@ -349,7 +349,7 @@ class PlaylistControllerTest extends WebTestCase
         self::assertSame(['removed' => 1, 'skipped' => 1], $this->remove('road-trip', [0 => self::SONG_B, 99 => self::SONG_C]));
         self::assertEquals([new SyncPlaylists($this->userId())], $this->queued(), 'Synchro pour réaligner');
         self::assertSame([
-            ['POST me/playlists', ['name' => 'Spotylist · Corbeille', 'description' => 'Titres retirés par Spotylist, à remettre en place depuis son journal.', 'public' => false]],
+            ['POST me/playlists', ['name' => 'B-Side · Corbeille', 'description' => 'Titres retirés par B-Side, à remettre en place depuis son journal.', 'public' => false]],
             ['POST playlists/trash/items', ['uris' => ['spotify:track:' . self::SONG_B]]],
             ['DELETE playlists/road-trip/items', ['items' => [['uri' => 'spotify:track:' . self::SONG_B]]]],
         ], $this->writes);
@@ -501,7 +501,7 @@ class PlaylistControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(201);
         self::assertSame(['id' => 'new'], json_decode((string) $this->client->getResponse()->getContent(), true));
         self::assertSame([
-            ['POST me/playlists', ['name' => 'Top 4 semaines', 'description' => 'Créée par Spotylist.', 'public' => false]],
+            ['POST me/playlists', ['name' => 'Top 4 semaines', 'description' => 'Créée par B-Side.', 'public' => false]],
             ['POST playlists/new/items', ['uris' => array_map(static fn (string $id): string => 'spotify:track:' . $id, \array_slice($tracks, 0, 100))]],
             ['POST playlists/new/items', ['uris' => array_map(static fn (string $id): string => 'spotify:track:' . $id, \array_slice($tracks, 100))]],
         ], $this->writes, 'Par lots de 100');
@@ -563,7 +563,7 @@ class PlaylistControllerTest extends WebTestCase
         $mock = new MockHttpClient(fn (string $method, string $url, array $options): JsonMockResponse => 'GET' !== $method ? $this->write($method, $url, $options) : match (strtok($url, '?')) {
             'https://api.spotify.com/v1/me/playlists' => $this->page($url, array_map(fn (string $id): array => [
                 'id' => $id,
-                'name' => ['road-trip' => 'Road trip', 'mix' => 'Mix', 'discover' => 'Découvertes', 'collab' => 'Collab', 'trash' => 'Spotylist · Corbeille'][$id],
+                'name' => ['road-trip' => 'Road trip', 'mix' => 'Mix', 'discover' => 'Découvertes', 'collab' => 'Collab', 'trash' => 'B-Side · Corbeille'][$id],
                 'owner' => \in_array($id, ['road-trip', 'mix', 'trash'], true)
                     ? ['id' => 'me', 'display_name' => 'Jane Doe']
                     : ['id' => 'someone', 'display_name' => 'Someone'],
@@ -604,7 +604,7 @@ class PlaylistControllerTest extends WebTestCase
         }
 
         if ('POST me/playlists' === $request) {
-            if ('Spotylist · Corbeille' !== json_decode($options['body'], true)['name']) {
+            if ('B-Side · Corbeille' !== json_decode($options['body'], true)['name']) {
                 return new JsonMockResponse(['id' => 'new'], ['http_code' => 201]);
             }
             $this->snapshots['trash'] = 'v1';

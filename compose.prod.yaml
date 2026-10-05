@@ -2,7 +2,7 @@
 # Production environment override
 services:
   php:
-    image: ${IMAGES_PREFIX:-}spotylist-php-prod
+    image: ${IMAGES_PREFIX:-}b-side-php-prod
     build:
       context: ./api
       target: frankenphp_prod
@@ -15,7 +15,7 @@ services:
       SPOTIFY_CLIENT_SECRET: ${SPOTIFY_CLIENT_SECRET:?}
 
   worker:
-    image: ${IMAGES_PREFIX:-}spotylist-php-prod
+    image: ${IMAGES_PREFIX:-}b-side-php-prod
     build:
       context: ./api
       target: frankenphp_prod

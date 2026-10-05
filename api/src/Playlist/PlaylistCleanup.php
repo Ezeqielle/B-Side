@@ -23,7 +23,7 @@ use Symfony\Component\Messenger\MessageBusInterface;
  */
 class PlaylistCleanup
 {
-    public const string TRASH_NAME = 'Spotylist · Corbeille';
+    public const string TRASH_NAME = 'B-Side · Corbeille';
 
     /**
      * Titres traités et notés ensemble : la limite des likes, la plus basse de Spotify.
@@ -178,7 +178,7 @@ class PlaylistCleanup
 
     private function createTrash(User $user): string
     {
-        $id = $this->spotify->createPlaylist($user, self::TRASH_NAME, 'Titres retirés par Spotylist, à remettre en place depuis son journal.');
+        $id = $this->spotify->createPlaylist($user, self::TRASH_NAME, 'Titres retirés par B-Side, à remettre en place depuis son journal.');
         $user->setTrashPlaylistId($id);
         $this->entityManager->flush();
 

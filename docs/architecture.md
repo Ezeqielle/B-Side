@@ -76,7 +76,7 @@ Stats (`App\Playlist\PlaylistStats`) : `GET /api/playlists`, `/overview`, `/{id}
 
 0. Chaque titre visé arrive avec sa position et son id Spotify (`tracks: [{position, id}]`). Un titre qui n'est plus à cette position (la synchro a renuméroté la playlist) reste en place et compte dans `skipped` : la réponse est `{removed, skipped}`.
 
-1. Rien n'est définitif : un titre retiré est d'abord ajouté à la playlist privée « Spotylist · Corbeille », créée au premier retrait (`user.trash_playlist_id`). La synchro l'ignore, et l'oublie si elle a disparu de la bibliothèque : une autre est créée au retrait suivant.
+1. Rien n'est définitif : un titre retiré est d'abord ajouté à la playlist privée « B-Side · Corbeille », créée au premier retrait (`user.trash_playlist_id`). La synchro l'ignore, et l'oublie si elle a disparu de la bibliothèque : une autre est créée au retrait suivant.
 2. Chaque titre retiré est noté dans `removal`, avec sa playlist (id et nom), sa position et sa date d'ajout. Les titres d'un même retrait partagent leur `removed_at`. `GET /api/removals` donne le journal.
 3. Traitement par lots de 40 (la limite de `/me/library`) : corbeille, retrait de la source, journal. Après une erreur, chaque lot retiré est dans le journal.
 4. Spotify retire toutes les occurrences d'un titre d'une playlist : celles qu'on garde sont remises à leur position.

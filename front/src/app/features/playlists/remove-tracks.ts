@@ -28,7 +28,7 @@ import { Removal } from './removal';
             @if (removal().targets().length > 1) {
               {{ names() }}.
             }
-            Ils sont d'abord copiés dans ta playlist « Spotylist · Corbeille », et notés dans le journal :
+            Ils sont d'abord copiés dans ta playlist « B-Side · Corbeille », et notés dans le journal :
             tu pourras les remettre en place.
           </p>
         </hlm-alert-dialog-header>

@@ -177,6 +177,7 @@ docker compose cp php:/data/caddy/pki/authorities/local/root.crt /tmp/caddy-root
 - `make db-test` (once) then `make phpunit`: backend tests
 - `make front-test`: front tests (Vitest)
 - `make ci`: run everything
+- `make release v=1.2.3`: tag the version; CI then tests and publishes the Docker Hub image (`1.2.3` and `latest`)
 
 ## Structure
 

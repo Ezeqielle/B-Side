@@ -137,6 +137,8 @@ L'étape `front_builder` du `api/Dockerfile` compile Angular à partir du contex
 
 Un tag `v*` lance `.github/workflows/docker.yml` : `make ci` et `make front-test`, puis l'image `b-side-php-prod` (amd64 et arm64) est publiée sur Docker Hub. `latest` ne suit que les versions finales (`v1.2.3`, pas `v1.2.3-rc.1`).
 
+Autre façon de publier : onglet Actions, workflow « Docker », « Run workflow » avec une version. Le run vérifie la version (format, depuis `main`, tag absent), lance les tests, crée le tag puis publie l'image. Sans version, il publie l'image de la branche (`:main`).
+
 À configurer dans le dépôt GitHub : la variable `DOCKERHUB_USERNAME` et le secret `DOCKERHUB_TOKEN`.
 
 ## Choix

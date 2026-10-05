@@ -1,6 +1,9 @@
-twig:
-    file_name_pattern: '*.twig'
+# Twig ne sert qu'au profiler (dépendance de dev) : absent de l'image de prod
+when@dev:
+    twig:
+        file_name_pattern: '*.twig'
 
 when@test:
     twig:
+        file_name_pattern: '*.twig'
         strict_variables: true

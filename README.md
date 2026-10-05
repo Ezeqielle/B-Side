@@ -1,5 +1,7 @@
 # B-Side
 
+> 100% vibe codé avec Claude Code / Opus 5.5 `<high>`
+
 Application web perso branchée sur un compte Spotify : stats d'écoute, playlists générées à partir de ces stats, nettoyage des titres likés, exploration de titres proches, extrait audio au survol des pochettes.
 
 ## Stack

@@ -4,6 +4,116 @@
 
 Personal web app connected to a Spotify account: listening stats, playlists generated from those stats, liked tracks cleanup, similar tracks exploration, audio preview on cover hover.
 
+## Run with Docker
+
+> [!WARNING]
+> B-Side is vibe coded and has not been security audited. Keep it on your local network, or reach it through a VPN: do not expose it to the Internet.
+
+No need to clone the repository. Everything lives in one `bside/` folder:
+
+```
+bside/
+├── compose.yaml
+├── bside.env       # your settings
+├── caddy/          # certificates
+└── database/
+```
+
+```bash
+mkdir -p bside/caddy/data bside/caddy/config bside/database
+cd bside
+```
+
+In `bside/`, create `bside.env` with your settings and replace every `CHANGE_ME`:
+
+```dotenv
+# Your user and group, given by the `id` command: they own the caddy/ folder
+PUID=1000
+PGID=1000
+
+# Server IP or domain name
+SERVER_NAME=127.0.0.1
+# Same value as SERVER_NAME
+CADDY_GLOBAL_OPTIONS=default_sni 127.0.0.1
+
+# Database password (letters and digits only), written twice
+POSTGRES_PASSWORD=CHANGE_ME
+DATABASE_URL=postgresql://app:CHANGE_ME@b-side-db:5432/app?serverVersion=18
+
+# Long random text
+APP_SECRET=CHANGE_ME
+
+# From the Spotify app (see Installation below)
+SPOTIFY_CLIENT_ID=CHANGE_ME
+SPOTIFY_CLIENT_SECRET=CHANGE_ME
+```
+
+Then `compose.yaml`, in the same folder, nothing to change:
+
+```yaml
+services:
+  b-side:
+    image: smbpunt/b-side-php-prod:latest
+    container_name: b-side
+    env_file: bside.env
+    volumes:
+      - ./caddy/data:/data # certificates
+      - ./caddy/config:/config
+    ports:
+      - 80:80 # HTTP
+      - 443:443 # HTTPS
+      - 443:443/udp # HTTP/3 (optional)
+    depends_on:
+      - b-side-db
+    restart: unless-stopped
+
+  # Background Spotify sync
+  b-side-worker:
+    image: smbpunt/b-side-php-prod:latest
+    container_name: b-side-worker
+    command: php bin/console messenger:consume async --time-limit=3600 --memory-limit=128M
+    env_file: bside.env
+    depends_on:
+      b-side:
+        condition: service_healthy
+    healthcheck:
+      disable: true
+    restart: unless-stopped
+
+  b-side-db:
+    image: postgres:18-alpine
+    container_name: b-side-db
+    env_file: bside.env
+    environment:
+      - POSTGRES_USER=app
+      - POSTGRES_DB=app
+    volumes:
+      - ./database:/var/lib/postgresql
+    restart: unless-stopped
+```
+
+Then `docker compose up -d` from `bside/` and open `https://<SERVER_NAME>`.
+
+In the Spotify app (see [Installation](#installation)), the redirect URIs use the same address: `https://<SERVER_NAME>/api/auth/callback` and `https://<SERVER_NAME>/api/accounts/link/callback`.
+
+### Other ports
+
+In `compose.yaml`, change the left number only, for example `8443:443`. The address becomes `https://<SERVER_NAME>:8443`, Spotify redirect URIs included. With a domain name and a Let's Encrypt certificate, keep 80 and 443.
+
+### Behind your own reverse proxy
+
+If nginx, Traefik, Nginx Proxy Manager or Synology already handles the certificate, B-Side serves plain HTTP behind it. In `bside.env`:
+
+```dotenv
+# HTTP only, no certificate
+SERVER_NAME=:80
+# Trust the proxy
+SYMFONY_TRUSTED_PROXIES=private_ranges
+# Remove the CADDY_GLOBAL_OPTIONS line, keep the others
+```
+
+In `compose.yaml`, replace the three `ports` lines with `- 8080:80`. The proxy forwards `https://<your domain>` to `http://<server>:8080`.
+
 ## Stack
 
 - **Backend**: Symfony 8.1 / PHP 8.5, JSON API under `/api`

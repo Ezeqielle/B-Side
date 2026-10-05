@@ -1,6 +1,15 @@
 #!/bin/sh
 set -e
 
+# Prod : comme les images linuxserver, PUID/PGID choisissent l'utilisateur.
+# Il reçoit les dossiers montés (/data, /config) et var/, puis l'appli tourne sous son nom.
+if [ "$(id -u)" = '0' ] && [ "$APP_ENV" = 'prod' ]; then
+	PUID=${PUID:-33}
+	PGID=${PGID:-33}
+	chown -R "$PUID:$PGID" /data /config var
+	exec setpriv --reuid="$PUID" --regid="$PGID" --clear-groups "$0" "$@"
+fi
+
 if [ "$1" = 'frankenphp' ] || [ "$1" = 'php' ] || [ "$1" = 'bin/console' ]; then
 	if [ -z "$(ls -A 'vendor/' 2>/dev/null)" ]; then
 		composer install --prefer-dist --no-progress --no-interaction
